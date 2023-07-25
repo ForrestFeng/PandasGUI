@@ -63,8 +63,11 @@ def scatter(data_frame: DataFrame,
             trendline: Literal[None, 'ols', 'lowess'] = None,
             marginal: Literal[None, 'histogram', 'rug', 'box', 'violin'] = None,
             **kwargs) -> Figure:
-    if size is not None:
+    # size is to control how large/small the scatter when plotting. It must be able to convert to float number.
+    if size != None:
         data_frame = data_frame.dropna(subset=[size])
+    # Note: If trendline is specified, both x and y must be able to convert to floating type
+    # The treadline calculation requires pip pkg statsmodels
     fig = px.scatter(data_frame=data_frame,
                      x=x,
                      y=y,
@@ -95,10 +98,12 @@ def line(data_frame: DataFrame,
          aggregation: Literal['mean', 'median', 'min', 'max', 'sum', None] = 'mean',
          **kwargs) -> Figure:
     # Create list of key columns
-    key_cols = [val for val in [x, color, facet_row, facet_col] if val is not None]
+    key_cols = [val for val in [x, color, facet_row, facet_col] if val != None]
     if key_cols != []:
-        if aggregation is not None:
-            data_frame = data_frame.groupby(key_cols).agg(aggregation).reset_index()
+        if aggregation != None:
+            # From Pandas 2.0.3 requires to specify the column name aggregate
+            # TODO: allow user to select multi cols into y.
+            data_frame = data_frame.groupby(key_cols)[[y]].agg(aggregation).reset_index()
         else:
             # Only need to sort here because aggregation already sorts
             data_frame = data_frame.sort_values(key_cols)
@@ -134,7 +139,9 @@ def bar(data_frame: DataFrame,
     key_cols = [val for val in [x, color, facet_row, facet_col] if val is not None]
     if key_cols != []:
         if aggregation is not None:
-            data_frame = data_frame.groupby(key_cols).agg(aggregation).reset_index()
+            # From Pandas 2.0.3 requires to specify the column name aggregate
+            # TODO: allow user to select multi cols into y.
+            data_frame = data_frame.groupby(key_cols)[[y]].agg(aggregation).reset_index()
         else:
             # Only need to sort here because aggregation already sorts
             data_frame = data_frame.sort_values(key_cols)
