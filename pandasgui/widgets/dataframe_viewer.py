@@ -380,88 +380,52 @@ class DataTableModel(QtCore.QAbstractTableModel):
                 or role == QtCore.Qt.EditRole
                 or role == QtCore.Qt.ToolTipRole
                 or role == QtCore.Qt.BackgroundRole):
-            print("---")
             return None
-
-        SPEED_UP_WITH_DF_TO_NUMPY = True
 
         # Check cell
         row = index.row()
         col = index.column()
-        ret = 'Not Initialized'
 
-        print(f"      get({row}, {col})")
-
-        start_time = time.time()
-        cell = "NoValue"
-        if not SPEED_UP_WITH_DF_TO_NUMPY:
-            # Access this way is slow avg. 1.5 ms
-            # cell = self.pgdf.df.iloc[row, col]
-            # Access this way is slow avg. 1.0 ms
-            # cell = self.pgdf.df.iloc[:,col][row]
-            # This version is quick avg. 0 ms
-            cell = self.pgdf.df.iloc[row, col]
-        else:
-            nparray = self.pgdf.nparray
-            cell = nparray[row][col]
-
+        nparray = self.pgdf.nparray
+        cell = nparray[row][col]
 
         # Check if cell is NaN
-        cell_is_na = False
-        cell_dtype = self.pgdf.df_coldtypes[col]
+        cell_is_na = pd.isna(cell)
+        col_dtype = self.pgdf.df_coldtypes[col]
 
-        #cell_is_na = pd.isna(cell)
-        end_time = time.time()
-        print(f"Execution time 0: {(end_time - start_time) * 1000:.5f} ms")
+        if (0, 6) == (row, col):
+            if self.pgdf.df.columns[col] == 'Max':
+                v = self.pgdf.df.iloc[row, col]
 
         if (role == QtCore.Qt.DisplayRole or role == QtCore.Qt.EditRole):
             # Need to check type since a cell might contain a list or Series, then .isna returns a Series not a bool
             start_time = time.time()
-            if cell_dtype == AbsDType.FLOATING:  # Float formatting
-                ret = str(round(cell, 3))
-                end_time = time.time()
-                print(f"Execution time 3: {(end_time - start_time) * 1000:.5f} ms")
-                return ret
-            elif cell_dtype == AbsDType.STRING:
-                if dtype_to_absdtype(type(cell)) != AbsDType.STRING:
-                    ret = ""
+            if col_dtype == AbsDType.FLOATING:  # Float formatting
+                return str(round(cell, 3))
+            elif col_dtype == AbsDType.OBJECT:
+                if type(cell) == str:
+                    return cell
                 else:
-                    ret = str(cell)
-                return ret
-            else:                      # Int and xxx formatting
-                ret = str(cell)
-                end_time = time.time()
-                print(f"Execution time 4: {(end_time - start_time) * 1000:.5f} ms")
-                return ret
+                    return str(cell)
+            else:
+                return str(cell)
 
         elif role == QtCore.Qt.ToolTipRole:
-            start_time = time.time()
-            if cell_dtype == AbsDType.STRING: # Str formatting
-                ret = cell
-                print(f"Execution time 6: {(end_time - start_time) * 1000:.5f} ms")
-                return ret
+            if col_dtype == AbsDType.STRING: # Str formatting
+                return cell
 
         elif role == QtCore.Qt.BackgroundRole:
             ret = None
-            start_time = time.time()
             color_mode = self.dataframe_viewer.color_mode
-            if color_mode == None or cell_is_na:
-                ret = None
-            end_time = time.time()
-            print(f"Execution time 7: {(end_time - start_time) * 1000:.5f} ms")
-            return ret
+            if color_mode is None or cell_is_na:
+                return None
 
-            start_time = time.time()
             try:
                 x = float(cell)
             except:
                 # Cell isn't numeric
-                ret = None
-            end_time = time.time()
-            print(f"Execution time 8: {(end_time - start_time) * 1000:.5f} ms")
-            return ret
+                return None
 
-            start_time = time.time()
             if color_mode == 'all':
                 percentile = cell / self.pgdf.column_statistics['Max'].max()
             elif color_mode == 'row':
@@ -470,19 +434,11 @@ class DataTableModel(QtCore.QAbstractTableModel):
                 percentile = cell / self.pgdf.column_statistics['Max'][col]
             else:
                 raise ValueError
-            end_time = time.time()
-            print(f"Execution time 9: {(end_time - start_time) * 1000:.5f} ms")
 
-            start_time = time.time()
             if isinstance(cell, (float, np.floating)) and np.isnan(cell):
-                ret = None
-                end_time = time.time()
-                print(f"Execution time 10: {(end_time - start_time) * 1000:.5f} ms")
-                return ret
+                return None
             else:
                 ret = QtGui.QColor(QtGui.QColor(255, 0, 0, int(255 * percentile)))
-                end_time = time.time()
-                print(f"Execution time 11: {(end_time - start_time) * 1000:.5f} ms")
                 return ret
         else:
             return None
