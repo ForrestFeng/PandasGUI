@@ -611,7 +611,7 @@ class ColumnListDropZone(QtWidgets.QListWidget):
         self.setDefaultDropAction(QtCore.Qt.MoveAction)
 
     def sizeHint(self):
-        width = super().sizeHint().width()
+        width = 0
         height = sum([self.sizeHintForRow(i) for i in range(self.count())]) + 5
         if self.count() == 0:
             height += 30
