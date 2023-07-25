@@ -97,8 +97,9 @@ def line(data_frame: DataFrame,
     # Create list of key columns
     key_cols = [val for val in [x, color, facet_row, facet_col] if val is not None]
     if key_cols != []:
-        if aggregation is not None:
-            data_frame = data_frame.groupby(key_cols).agg(aggregation).reset_index()
+        if aggregation != None:
+            # Pandas 2.0.3 requires to specify the column names in aggregate
+            data_frame = data_frame.groupby(key_cols)[y].agg(aggregation).reset_index()
         else:
             # Only need to sort here because aggregation already sorts
             data_frame = data_frame.sort_values(key_cols)
@@ -134,7 +135,8 @@ def bar(data_frame: DataFrame,
     key_cols = [val for val in [x, color, facet_row, facet_col] if val is not None]
     if key_cols != []:
         if aggregation is not None:
-            data_frame = data_frame.groupby(key_cols).agg(aggregation).reset_index()
+            # Pandas 2.0.3 requires to specify the column names in aggregate
+            data_frame = data_frame.groupby(key_cols)[[y]].agg(aggregation).reset_index()
         else:
             # Only need to sort here because aggregation already sorts
             data_frame = data_frame.sort_values(key_cols)
