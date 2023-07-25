@@ -70,7 +70,7 @@ class ColumnViewer(QtWidgets.QWidget):
         super().__init__()
 
         self.tree: FlatDraggableTree = FlatDraggableTree()
-        self.tree.setHeaderLabels(['Name'])
+        self.tree.setHeaderHidden(True)
         self.tree.setDragEnabled(True)
         self.tree.setDefaultDropAction(Qt.CopyAction)
 
