@@ -402,9 +402,13 @@ class DataTableModel(QtCore.QAbstractTableModel):
             start_time = time.time()
             if col_dtype == AbsDType.FLOATING:  # Float formatting
                 return str(round(cell, 3))
+            if col_dtype == AbsDType.INTEGER:
+                return str(cell)
             elif col_dtype == AbsDType.OBJECT:
                 if type(cell) == str:
                     return cell
+                elif cell_is_na:
+                    return ""
                 else:
                     return str(cell)
             else:

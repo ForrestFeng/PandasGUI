@@ -14,6 +14,7 @@ class AbsDType:
     BOOL = "BOOL"
     DATETIEM = "DATETIEM"
     STRING = "STRING"
+    OBJECT = "OBJECT"
     UNKNOWN = "UNKNOWN"
 
 def dtype_to_absdtype(dtype):
@@ -29,30 +30,16 @@ def dtype_to_absdtype(dtype):
         t = AbsDType.BOOL
     elif pd.api.types.is_datetime64_any_dtype(dtype):
         t = AbsDType.DATETIEM
-    elif dtype == np.object_ or dtype == np.str_ or pd.api.types.is_string_dtype(dtype):
+    elif dtype == str:
         t = AbsDType.STRING
+    elif dtype == object or dtype == np.object_:
+        t = AbsDType.OBJECT
     return t
 
-
-def df_col_dtype(df, col): #-> Union('INTEGER', 'FLOATING', "STRING", 'DATETIME', 'BOOL')
+def df_col_dtype(df, col): #-> Union('INTEGER', 'FLOATING', "STRING", 'DATETIME', 'BOOL', 'OBJECT')
     c = df.iloc[:, col]
-    t = AbsDType.UNKNOWN
-    # Test if 'Age' column data type is int64
-    if pd.api.types.is_integer_dtype(c.dtype):#np.issubdtype(c.dtype, np.integer):
-        t = AbsDType.INTEGER
-    elif pd.api.types.is_float_dtype(c.dtype): #np.issubdtype(c.dtype, np.floating):
-        t = AbsDType.FLOATING
-    # Test if 'IsStudent' column data type is bool
-    elif pd.api.types.is_bool_dtype(c.dtype): #c.dtype == bool:
-        t = AbsDType.BOOL
-    # Test if 'JoinDate' column data type is datetime64
-    elif pd.api.types.is_datetime64_any_dtype(c):
-        t = AbsDType.DATETIEM
-    elif pd.api.types.is_string_dtype(c.dtype):
-        t = AbsDType.STRING
-    print(f"column {col} is of type {t}.")
+    t = dtype_to_absdtype(c.dtype)
     return t
-
 
 logger = logging.getLogger(__name__)
 
@@ -173,7 +160,7 @@ def flatten_multiindex(mi, sep=" - ", format=None):
 
     if issubclass(type(mi), pd.core.indexes.multi.MultiIndex):
         # Flatten multi-index headers
-        if format == None:
+        if format is None:
             # Flatten by putting sep between each header value
             flat_index = [sep.join([str(x) for x in tup]).strip(sep)
                           for tup in mi.values]
@@ -181,7 +168,6 @@ def flatten_multiindex(mi, sep=" - ", format=None):
             # Flatten according to the provided format string
             flat_index = []
             for tuple in mi.values:
-
                 placeholders = []
                 for name in mi.names:
                     if name is None:
@@ -541,7 +527,7 @@ def get_figure_type(fig) -> typing.Literal[
 def parse_cell(text, column_dtype):
     import numpy as np
     typ = dtype_to_absdtype(column_dtype)
-    if typ == AbsDType.STRING:
+    if typ == AbsDType.OBJECT:
         return text
     elif typ == AbsDType.FLOATING:
         if text == "":

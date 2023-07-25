@@ -116,12 +116,12 @@ class DetachableTabWidget(QtWidgets.QTabWidget):
         # Determine if the given image and the main window icon are the same.
         # If they are, then do not add the icon to the tab
         if tabIconImage == windowIconImage:
-            if insertAt == None:
+            if insertAt is None:
                 index = self.addTab(contentWidget, name)
             else:
                 index = self.insertTab(insertAt, contentWidget, name)
         else:
-            if insertAt == None:
+            if insertAt is None:
                 index = self.addTab(contentWidget, icon, name)
             else:
                 index = self.insertTab(insertAt, contentWidget, icon, name)
