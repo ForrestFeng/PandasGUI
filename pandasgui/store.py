@@ -1,5 +1,6 @@
 from __future__ import annotations
 import typing
+import numpy
 from abc import abstractmethod
 
 if typing.TYPE_CHECKING:
@@ -293,6 +294,7 @@ class PandasGuiDataFrameStore(PandasGuiStoreItem):
         df = df.copy()
 
         self.df: DataFrame = df
+        self.ndarray: numpy.array = df.to_numpy()
         self.df_unfiltered: DataFrame = df
         self.name = name
 
@@ -680,6 +682,7 @@ class PandasGuiDataFrameStore(PandasGuiStoreItem):
     # Other
 
     def data_changed(self):
+        self.ndarray = self.df.to_numpy()
         self.refresh_ui()
         self.refresh_statistics()
         # Remake Grapher plot

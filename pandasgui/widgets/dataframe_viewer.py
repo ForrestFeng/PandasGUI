@@ -375,7 +375,7 @@ class DataTableModel(QtCore.QAbstractTableModel):
 
         row = index.row()
         col = index.column()
-        cell = self.pgdf.df.iloc[row, col]
+        cell = self.pgdf.ndarray[row][col]
 
         if (role == QtCore.Qt.DisplayRole
                 or role == QtCore.Qt.EditRole
