@@ -165,6 +165,78 @@ def test_object_types():
     gui = show(comments, pokemon, fig, poke_sbuf, poke_bbuf, poke_tmp.name)
 
 
+def test_pandas_dataframe_performance():
+    """This is to test which operation on pandas data frame is more expensive"""
+    import timeit
+    from random import randint
+    from pandasgui.datasets import pokemon
+
+    def get_cell_in_dataframe(df, row=None, col=None):
+        """Return cell"""
+        if row is None:
+            rows = len(df)
+            row = randint(0, rows-1)
+        if col is None:
+            cols = len(df.columns)
+            col = randint(0, cols-1)
+
+        cell = df.iloc[row, col]
+        return cell
+
+    def get_cell_in_ndarray(ndarray, row=None, col=None):
+        """Return cell"""
+        if row is None:
+            rows = ndarray.shape[0]
+            row = randint(0, rows-1)
+        if col is None:
+            cols = ndarray.shape[1]
+            col = randint(0, cols-1)
+
+        cell = ndarray[row, col]
+        return cell
+
+    def check_cell_isnan(cell):
+        """Check if cell is nan"""
+        ret = pd.isna(cell)
+        return ret
+
+    def print_performance(milli_seconds_took, repeat_times, fun_name):
+        print(f"It took {milli_seconds_took:.3f} ms with {repeat_times} time execution of {fun_name}", end='')
+        ms_per_time = milli_seconds_took / repeat_times
+        if ms_per_time <= 2/1000:
+            print(" -- it is very fast")
+        elif ms_per_time <= 10/1000:
+            print(" -- it is fast")
+        elif ms_per_time > 20/1000:
+            print(" -- it is a very slow")
+        elif ms_per_time > 10/1000:
+            print(" -- it is slow")
+        else:
+            print()
+
+    repeat = 1000
+
+    # time used with dataframe
+    milli_seconds = timeit.timeit(lambda: get_cell_in_dataframe(pokemon), number=repeat) * 1000
+    print_performance(milli_seconds, repeat, "get_cell_in_dataframe")
+    milli_seconds = timeit.timeit(lambda: check_cell_isnan(get_cell_in_dataframe(pokemon)), number=repeat) * 1000
+    print_performance(milli_seconds, repeat, "check_cell_isnan")
+
+    # time used with ndarray
+    ndarray = pokemon.to_numpy()
+    milli_seconds = timeit.timeit(lambda: get_cell_in_ndarray(ndarray), number=repeat) * 1000
+    print_performance(milli_seconds, repeat, "get_cell_in_ndarray")
+
+    milli_seconds = timeit.timeit(lambda: check_cell_isnan(get_cell_in_ndarray(ndarray)), number=repeat) * 1000
+    print_performance(milli_seconds, repeat, "check_cell_isnan")
+
+
+
+
+print("test_pandas_dataframe_performance")
+test_pandas_dataframe_performance()
+sys.exit(0)
+
 print('test_json')
 test_json()
 print('test_inputs')
