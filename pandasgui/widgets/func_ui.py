@@ -661,6 +661,8 @@ class ColumnListDropZone(QtWidgets.QListWidget):
 
     def mouseDoubleClickEvent(self, e: QtGui.QMouseEvent) -> None:
         ix = self.indexAt(e.pos())
+        if ix.row() < 0 or ix.column() < 0:
+            return
         sip.delete(self.itemAt(e.pos()))
         self.valueChanged.emit([self.item(ix).text() for ix in range(self.count())])
         super().mouseDoubleClickEvent(e)
