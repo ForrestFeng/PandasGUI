@@ -3,12 +3,15 @@ import threading
 import os
 from typing import Union
 
+import time
+
 import numpy as np
 import pandas as pd
 from PyQt5 import QtCore, QtGui, QtWidgets
 from PyQt5.QtCore import Qt
 from typing_extensions import Literal
 from pandasgui.store import PandasGuiDataFrameStore
+from pandasgui.utility import AbsDType, dtype_to_absdtype
 import pandasgui
 
 import logging
@@ -372,47 +375,93 @@ class DataTableModel(QtCore.QAbstractTableModel):
 
     # Returns the data from the DataFrame
     def data(self, index, role=QtCore.Qt.DisplayRole):
+        # only care specific roles to improve speed
+        if not (role == QtCore.Qt.DisplayRole
+                or role == QtCore.Qt.EditRole
+                or role == QtCore.Qt.ToolTipRole
+                or role == QtCore.Qt.BackgroundRole):
+            print("---")
+            return None
 
+        SPEED_UP_WITH_DF_TO_NUMPY = True
+
+        # Check cell
         row = index.row()
         col = index.column()
-        cell = self.pgdf.df.iloc[row, col]
+        ret = 'Not Initialized'
 
-        if (role == QtCore.Qt.DisplayRole
-                or role == QtCore.Qt.EditRole
-                or role == QtCore.Qt.ToolTipRole):
+        print(f"      get({row}, {col})")
+
+        start_time = time.time()
+        cell = "NoValue"
+        if not SPEED_UP_WITH_DF_TO_NUMPY:
+            # Access this way is slow avg. 1.5 ms
+            # cell = self.pgdf.df.iloc[row, col]
+            # Access this way is slow avg. 1.0 ms
+            # cell = self.pgdf.df.iloc[:,col][row]
+            # This version is quick avg. 0 ms
+            cell = self.pgdf.df.iloc[row, col]
+        else:
+            nparray = self.pgdf.nparray
+            cell = nparray[row][col]
+
+
+        # Check if cell is NaN
+        cell_is_na = False
+        cell_dtype = self.pgdf.df_coldtypes[col]
+
+        #cell_is_na = pd.isna(cell)
+        end_time = time.time()
+        print(f"Execution time 0: {(end_time - start_time) * 1000:.5f} ms")
+
+        if (role == QtCore.Qt.DisplayRole or role == QtCore.Qt.EditRole):
             # Need to check type since a cell might contain a list or Series, then .isna returns a Series not a bool
-            cell_is_na = pd.isna(cell)
-            if type(cell_is_na) == bool and cell_is_na:
-                if role == QtCore.Qt.DisplayRole:
-                    return "●"
-                elif role == QtCore.Qt.EditRole:
-                    return ""
-                elif role == QtCore.Qt.ToolTipRole:
-                    return "NaN"
-
-            # Float formatting
-            if isinstance(cell, (float, np.floating)):
-                if role == QtCore.Qt.DisplayRole:
-                    return str(round(cell, 3))
-
-            return str(cell)
+            start_time = time.time()
+            if cell_dtype == AbsDType.FLOATING:  # Float formatting
+                ret = str(round(cell, 3))
+                end_time = time.time()
+                print(f"Execution time 3: {(end_time - start_time) * 1000:.5f} ms")
+                return ret
+            elif cell_dtype == AbsDType.STRING:
+                if dtype_to_absdtype(type(cell)) != AbsDType.STRING:
+                    ret = ""
+                else:
+                    ret = str(cell)
+                return ret
+            else:                      # Int and xxx formatting
+                ret = str(cell)
+                end_time = time.time()
+                print(f"Execution time 4: {(end_time - start_time) * 1000:.5f} ms")
+                return ret
 
         elif role == QtCore.Qt.ToolTipRole:
-            return str(cell)
+            start_time = time.time()
+            if cell_dtype == AbsDType.STRING: # Str formatting
+                ret = cell
+                print(f"Execution time 6: {(end_time - start_time) * 1000:.5f} ms")
+                return ret
 
         elif role == QtCore.Qt.BackgroundRole:
-
+            ret = None
+            start_time = time.time()
             color_mode = self.dataframe_viewer.color_mode
+            if color_mode == None or cell_is_na:
+                ret = None
+            end_time = time.time()
+            print(f"Execution time 7: {(end_time - start_time) * 1000:.5f} ms")
+            return ret
 
-            if color_mode == None or pd.isna(cell):
-                return None
-
+            start_time = time.time()
             try:
                 x = float(cell)
             except:
                 # Cell isn't numeric
-                return None
+                ret = None
+            end_time = time.time()
+            print(f"Execution time 8: {(end_time - start_time) * 1000:.5f} ms")
+            return ret
 
+            start_time = time.time()
             if color_mode == 'all':
                 percentile = cell / self.pgdf.column_statistics['Max'].max()
             elif color_mode == 'row':
@@ -421,11 +470,23 @@ class DataTableModel(QtCore.QAbstractTableModel):
                 percentile = cell / self.pgdf.column_statistics['Max'][col]
             else:
                 raise ValueError
+            end_time = time.time()
+            print(f"Execution time 9: {(end_time - start_time) * 1000:.5f} ms")
 
-            if pd.isna(percentile):
-                return None
+            start_time = time.time()
+            if isinstance(cell, (float, np.floating)) and np.isnan(cell):
+                ret = None
+                end_time = time.time()
+                print(f"Execution time 10: {(end_time - start_time) * 1000:.5f} ms")
+                return ret
             else:
-                return QtGui.QColor(QtGui.QColor(255, 0, 0, int(255 * percentile)))
+                ret = QtGui.QColor(QtGui.QColor(255, 0, 0, int(255 * percentile)))
+                end_time = time.time()
+                print(f"Execution time 11: {(end_time - start_time) * 1000:.5f} ms")
+                return ret
+        else:
+            return None
+
 
     def flags(self, index):
         if self.dataframe_viewer.pgdf.settings.editable:
@@ -1114,12 +1175,32 @@ class TrackingSpacer(QtWidgets.QFrame):
 
 # Examples
 if __name__ == "__main__":
+    from pandasgui.automatic_profiling import enable_profiling
+    #enable_profiling()
     app = QtWidgets.QApplication(sys.argv)
-    from pandasgui.datasets import pokemon, mi_manufacturing
+    from pandasgui.datasets import pokemon, mi_manufacturing, diamonds, basic, titanic
 
-    view = DataFrameViewer(pokemon)
-    view2 = DataFrameViewer(mi_manufacturing)
+    # rowsz = len(mi_manufacturing)
+    # colsz = len(mi_manufacturing.columns)
+    #
+    # nparray = mi_manufacturing.to_numpy()
+    # print('**************')
+    # for i in range(rowsz):
+    #     for j in range(colsz):
+    #         print(nparray[i][j], end='\t')
+    #     print()
+    # print('============================')
+    # for i in range(rowsz):
+    #     for j in range(colsz):
+    #         print(mi_manufacturing[i, j], end='\t')
+    #     print()
+    #
+    # print('**************')
+    # exit()
+
+    view = DataFrameViewer(titanic)
+    #view2 = DataFrameViewer(diamonds)
 
     view.show()
-    view2.show()
+    #view2.show()
     app.exec_()

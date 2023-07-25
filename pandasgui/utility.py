@@ -8,6 +8,52 @@ import sys
 import inspect
 from collections import OrderedDict
 
+class AbsDType:
+    INTEGER = "INTEGER"
+    FLOATING = "FLOATING"
+    BOOL = "BOOL"
+    DATETIEM = "DATETIEM"
+    STRING = "STRING"
+    UNKNOWN = "UNKNOWN"
+
+def dtype_to_absdtype(dtype):
+    import numpy as np
+    t = AbsDType.UNKNOWN
+    # Test if 'Age' column data type is int64
+    if pd.api.types.is_integer_dtype(dtype):#np.issubdtype(c.dtype, np.integer):
+        t = AbsDType.INTEGER
+    elif pd.api.types.is_float_dtype(dtype): #np.issubdtype(c.dtype, np.floating):
+        t = AbsDType.FLOATING
+    # Test if 'IsStudent' column data type is bool
+    elif pd.api.types.is_bool_dtype(dtype): #c.dtype == bool:
+        t = AbsDType.BOOL
+    elif pd.api.types.is_datetime64_any_dtype(dtype):
+        t = AbsDType.DATETIEM
+    elif dtype == np.object_ or dtype == np.str_ or pd.api.types.is_string_dtype(dtype):
+        t = AbsDType.STRING
+    return t
+
+
+def df_col_dtype(df, col): #-> Union('INTEGER', 'FLOATING', "STRING", 'DATETIME', 'BOOL')
+    c = df.iloc[:, col]
+    t = AbsDType.UNKNOWN
+    # Test if 'Age' column data type is int64
+    if pd.api.types.is_integer_dtype(c.dtype):#np.issubdtype(c.dtype, np.integer):
+        t = AbsDType.INTEGER
+    elif pd.api.types.is_float_dtype(c.dtype): #np.issubdtype(c.dtype, np.floating):
+        t = AbsDType.FLOATING
+    # Test if 'IsStudent' column data type is bool
+    elif pd.api.types.is_bool_dtype(c.dtype): #c.dtype == bool:
+        t = AbsDType.BOOL
+    # Test if 'JoinDate' column data type is datetime64
+    elif pd.api.types.is_datetime64_any_dtype(c):
+        t = AbsDType.DATETIEM
+    elif pd.api.types.is_string_dtype(c.dtype):
+        t = AbsDType.STRING
+    print(f"column {col} is of type {t}.")
+    return t
+
+
 logger = logging.getLogger(__name__)
 
 
@@ -494,12 +540,12 @@ def get_figure_type(fig) -> typing.Literal[
 # Take the text entered for a DataFrame cell and parse it into an appropriate type for the column
 def parse_cell(text, column_dtype):
     import numpy as np
-    if text == "":
-        return np.nan
-
-    if column_dtype == str:
+    typ = dtype_to_absdtype(column_dtype)
+    if typ == AbsDType.STRING:
         return text
-
+    elif typ == AbsDType.FLOATING:
+        if text == "":
+            return np.nan
     # Parse text using same logic as reading a CSV file by using a file buffer
     try:
         from io import StringIO
@@ -508,9 +554,6 @@ def parse_cell(text, column_dtype):
         return value
     except ValueError:
         raise ValueError(f"Could not convert {repr(text)} to type {column_dtype}")
-
-
-value = parse_cell('nan', str)
 
 
 def summarize_json(data, terse=True):

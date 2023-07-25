@@ -2,6 +2,8 @@ from __future__ import annotations
 import typing
 from abc import abstractmethod
 
+import numpy as np
+
 if typing.TYPE_CHECKING:
     from pandasgui.gui import PandasGui
     from pandasgui.widgets.filter_viewer import FilterViewer
@@ -18,7 +20,7 @@ from PyQt5 import QtCore, QtWidgets
 import traceback
 from datetime import datetime
 from pandasgui.utility import unique_name, in_interactive_console, refactor_variable, clean_dataframe, nunique, \
-    parse_cell, parse_all_dates, parse_date, get_movements
+    parse_cell, parse_all_dates, parse_date, get_movements, AbsDType, df_col_dtype
 from pandasgui.constants import LOCAL_DATA_DIR
 import os
 from enum import Enum
@@ -293,7 +295,14 @@ class PandasGuiDataFrameStore(PandasGuiStoreItem):
         df = df.copy()
 
         self.df: DataFrame = df
+        self.df_coldtypes: Dict[int, AbsDType] = {}
+        self.update_coldtypes()
+        self.nparray: np.array = df.to_numpy()
+
         self.df_unfiltered: DataFrame = df
+        self.df_unfiltered_coldtypes: Dict(int, AbsDType) = {}
+        self.update_unfiltered_coldtypes()
+
         self.name = name
 
         self.history: List[HistoryItem] = []
@@ -678,8 +687,21 @@ class PandasGuiDataFrameStore(PandasGuiStoreItem):
 
     ###################################
     # Other
+    def update_coldtypes(self):
+        cols = self.df.columns
+        self.df_coldtypes = {}
+        for i in range(len(cols)):
+            self.df_coldtypes[i] = df_col_dtype(self.df, i)
+
+    def update_unfiltered_coldtypes(self):
+        cols = self.df.columns
+        self.df_unfiltered_coldtypes = {}
+        for i in range(len(cols)):
+            self.df_unfiltered_coldtypes[i] = df_col_dtype(self.df, i)
 
     def data_changed(self):
+        self.nparray = self.df.to_numpy()
+        self.update_coldtypes()
         self.refresh_ui()
         self.refresh_statistics()
         # Remake Grapher plot
