@@ -28,8 +28,13 @@ class OtherDataFrame(DataFrame):
     pass
 
 
+class EvalScript(str):
+    """This script will be passed to df.eval()"""
+    pass
+
 # ============================================================================ #
 # Graphing
+
 
 def histogram(data_frame: DataFrame,
               x: ColumnNameList = None,
@@ -319,6 +324,45 @@ def word_cloud(data_frame: DataFrame,
 
 # ============================================================================ #
 # Reshaping
+
+
+def evaluate(data_frame: DataFrame,
+             script: EvalScript = None,
+             ):
+
+    if script.find('=') > 0:
+        # If script is in the form of
+        # """M = A + B
+        #N = C + D
+        #P = C * 2 + D
+        #"""
+        # ...
+        # this will result a copy of df with new columns M and N added
+        # need select the N, M out from the df
+        # split to [['M ', ' A + B'], ['N ', ' C + D'], ['P ', ' C * 2 + D'], ['']]
+        assigns = [line.split("=") for line in script.split("\n")]
+        column_names = []
+        for assign in assigns:
+            if len(assign) == 2:
+                stripped_name = assign[0].strip()
+                if not stripped_name.startswith("#"):
+                    column_names.append(stripped_name)
+        assert(len(column_names) > 0)
+        # consider set inplace=True if data_frame is too large, delete it after selection
+        data_frame = data_frame.eval(script, inplace=False,  engine='python')
+        df = data_frame[column_names]
+
+    elif script.find("extract") > 0:
+        # If script is with extract form of
+        # C.str.extract("regex_with_capture_group")
+        # this will result a pd.DataFrame with default column name 1, 2, 3 ...
+        df = data_frame.eval(script, inplace=False,  engine='python')
+
+    else:
+        df = data_frame.eval(script, inplace=False, engine='python')
+        #raise ValueError("Eval script only support 'ColX = ColA + ColB' or Col.str.extract('regex_with_one_capture_group')")
+
+    return df
 
 
 def pivot(data_frame: DataFrame,
