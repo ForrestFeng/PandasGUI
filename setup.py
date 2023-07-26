@@ -34,7 +34,8 @@ setup(
         "astor",
         "typing-extensions",
         "qtstylish>=0.1.2",
-        "pywin32; platform_system=='Windows'"
+        "pywin32; platform_system=='Windows'",
+        "statsmodels>=0.14.0"
     ],
     entry_points={
         "gui_scripts": [
