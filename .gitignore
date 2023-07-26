@@ -15,3 +15,7 @@ dist/
 *.egg-info
 .eggs
 pypi.sh
+
+
+# pip build 
+build/lib/
