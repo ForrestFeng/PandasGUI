@@ -428,7 +428,7 @@ class DataTableModel(QtCore.QAbstractTableModel):
                 return QtGui.QColor(QtGui.QColor(255, 0, 0, int(255 * percentile)))
 
     def flags(self, index):
-        if self.dataframe_viewer.pgdf.settings.editable:
+        if self.dataframe_viewer.pgdf.settings.editable.value:
             return QtCore.Qt.ItemIsEditable | QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsSelectable
         else:
             return QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsSelectable
