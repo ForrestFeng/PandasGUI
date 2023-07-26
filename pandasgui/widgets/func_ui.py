@@ -8,7 +8,7 @@ import inspect
 import pprint
 import pandas as pd
 
-from pandasgui.jotly import ColumnName, ColumnNameList, OtherDataFrame
+from pandasgui.jotly import ColumnName, ColumnNameList, OtherDataFrame, EvalScript
 from pandasgui.utility import nunique, get_function_body, refactor_variable, kwargs_string, flatten_df
 from pandasgui.store import SETTINGS_STORE, PandasGuiDataFrameStore
 import pandasgui
@@ -28,6 +28,16 @@ class HiddenArg:
 
 @dataclass
 class ColumnNameArg:
+    arg_name: str
+    default_value: str
+
+    def __init__(self, arg_name, default_value=None):
+        self.arg_name = arg_name
+        self.default_value = default_value
+
+
+@dataclass
+class EvalScriptArg:
     arg_name: str
     default_value: str
 
@@ -142,6 +152,9 @@ class Schema:
                     elif arg_type == OtherDataFrame:
                         args.append(OtherDataFrameArg(arg_name, default_value=arg_default))
 
+                    elif arg_type == EvalScript:
+                        args.append(EvalScriptArg(arg_name, default_value=arg_default) or '')
+
         self.name = name
         self.args = args
         self.label = label
@@ -149,7 +162,7 @@ class Schema:
         self.icon_path = icon_path
 
     name: str
-    args: List[Union[ColumnNameArg, ColumnNameListArg, LiteralArg, BooleanArg, IntArg]]
+    args: List[Union[ColumnNameArg, ColumnNameListArg, LiteralArg, BooleanArg, IntArg, EvalScriptArg]]
     label: str
     function: Callable
     icon_path: str
@@ -207,6 +220,9 @@ class FuncUi(QtWidgets.QWidget):
         self.source_tree = SourceTree(self.df)
         self.source_tree2 = SourceTree(self.df)
 
+        # Eval script
+        self.eval_script = QtWidgets.QPlainTextEdit()
+
         # Destinations tree
         self.dest_tree = DestinationTree(self)
         self.dest_tree.setHeaderLabels(['Name', 'Value'])
@@ -246,6 +262,7 @@ class FuncUi(QtWidgets.QWidget):
         self.source_tree_layout = QtWidgets.QVBoxLayout()
         self.source_tree_layout.addWidget(self.source_tree)
         self.source_tree_layout.addWidget(self.source_tree2)
+        self.source_tree_layout.addWidget(self.eval_script)
         self.source_tree_layout_wrapper = QtWidgets.QWidget()
         self.source_tree_layout_wrapper.setLayout(self.source_tree_layout)
 
@@ -327,11 +344,17 @@ class FuncUi(QtWidgets.QWidget):
         data = {}
 
         # Get args from destination UI
-        root = self.dest_tree.invisibleRootItem()
-        for i in range(root.childCount()):
-            item = root.child(i)
-            section = item.text(0)
-            data[section] = item.data(1, Qt.UserRole)
+        if self.dest_tree.isVisible():
+            root = self.dest_tree.invisibleRootItem()
+            for i in range(root.childCount()):
+                item = root.child(i)
+                section = item.text(0)
+                data[section] = item.data(1, Qt.UserRole)
+        elif self.eval_script.isVisible():
+            for arg in self.schema.args:
+                if type(arg) == EvalScriptArg:
+                    data[arg.arg_name] = self.eval_script.toPlainText().strip()
+                    break
 
         # Add custom kwargs
         root = self.kwargs_dialog.tree_widget.invisibleRootItem()
@@ -464,7 +487,6 @@ class FuncUi(QtWidgets.QWidget):
                 checkbox.stateChanged.emit(Qt.Checked if val else Qt.Unchecked)
                 checkbox.stateChanged.connect(lambda: self.valuesChanged.emit())
 
-
             elif type(arg) == IntArg:
                 spinbox = QtWidgets.QSpinBox()
 
@@ -534,12 +556,24 @@ class FuncUi(QtWidgets.QWidget):
                 combo_box.setCurrentIndex(ix)
                 combo_box.currentIndexChanged.emit(ix)  # Need this incase value was same
 
+            elif type(arg) == EvalScriptArg:
+                pass
+
         self.valuesChanged.emit()
 
+        # Show/Hide source_tree2
         if any([type(arg) == OtherDataFrameArg for arg in schema.args]):
             self.source_tree2.show()
         else:
             self.source_tree2.hide()
+
+        # # Show/Hide eval_script
+        if any([type(arg) == EvalScriptArg for arg in schema.args]):
+            self.eval_script.show()
+            self.dest_tree.hide()
+        else:
+            self.eval_script.hide()
+            self.dest_tree.show()
 
         self.dest_tree.autosize_columns()
 

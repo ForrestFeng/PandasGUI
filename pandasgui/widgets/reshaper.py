@@ -126,7 +126,12 @@ def clear_layout(layout):
 
 from pandasgui import jotly
 
-schemas = [Schema(name="pivot",
+schemas = [Schema(name="evaluate",
+                  label="Evaluate",
+                  function=jotly.evaluate,
+                  icon_path=os.path.join(pandasgui.__path__[0], "resources/images/draggers/concat.svg"),
+                  ),
+           Schema(name="pivot",
                   label="Pivot",
                   function=jotly.pivot,
                   icon_path=os.path.join(pandasgui.__path__[0], "resources/images/draggers/pivot.svg"),
