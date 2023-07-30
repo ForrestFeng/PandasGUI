@@ -2,6 +2,8 @@ import sys
 from typing import List
 from PyQt5 import QtWidgets, QtGui, QtCore
 from PyQt5.QtCore import Qt
+
+from pandasgui.widgets.auto_filter_viewer import AutoFilterViewer
 from pandasgui.widgets.code_history_viewer import CodeHistoryViewer
 
 from pandasgui.widgets.containers import Container
@@ -35,11 +37,11 @@ class DataFrameExplorer(QtWidgets.QWidget):
             self.main_window.GroupedDragging | self.main_window.AllowTabbedDocks | self.main_window.AllowNestedDocks)
         self.main_window.setTabPosition(Qt.AllDockWidgetAreas, QtWidgets.QTabWidget.North)
 
-        self.dataframe_viewer = DataFrameViewer(pgdf)
-        self.statistics_viewer = StatisticsViewer(pgdf)
-        self.grapher = Grapher(pgdf)
-        self.reshaper = Reshaper(pgdf)
-        self.code_history_viewer = CodeHistoryViewer(pgdf)
+        self.dataframe_viewer = DataFrameViewer(pgdf)    # FF: pgdf is PandasGuiDataFrameStore. NO copy is created of pgdf.df
+        self.statistics_viewer = StatisticsViewer(pgdf)  # FF: pgdf is PandasGuiDataFrameStore. NEW copy of pgdf.column_statistics is made for DataFrameViewer. The statistics is small not a big deal
+        self.grapher = Grapher(pgdf)                     # FF: pgdf is PandasGuiDataFrameStore, Grapher create FuncGui which creates SourceThre which inturn contains more than one NEW copy of pgdf.df
+        self.reshaper = Reshaper(pgdf)                   # FF: pgdf is PandasGuiDataFrameStore, Reshaper create FuncGui which creates SourceThre which inturn contains more than one NEW copy of pgdf.df
+        self.code_history_viewer = CodeHistoryViewer(pgdf) # FF: pgdf is PandasGuiDataFrameStore. NO copy is created of pgdf.df
 
         self.dataframe_dock = self.add_view(self.dataframe_viewer, "DataFrame")
         self.statistics_dock = self.add_view(self.statistics_viewer, "Statistics")
@@ -59,8 +61,9 @@ class DataFrameExplorer(QtWidgets.QWidget):
         ##################
         # Non-Dock widgets
 
-        self.filter_viewer = FilterViewer(pgdf)
-        self.column_viewer = ColumnArranger(self.pgdf)
+        self.filter_viewer = FilterViewer(pgdf)           # FF: pgdf is PandasGuiDataFrameStore. NO copy is created of pgdf.df
+        self.column_viewer = ColumnArranger(pgdf)         # FF: pgdf is PandasGuiDataFrameStore. NO copy is created of pgdf.df
+        self.auto_filter_viewer = AutoFilterViewer(pgdf)
 
         ##################
         # Set up overall layout
@@ -80,6 +83,7 @@ class DataFrameExplorer(QtWidgets.QWidget):
         self.splitter.addWidget(self.main_window)
         self.side_bar.addWidget(self.filter_viewer_container)
         self.side_bar.addWidget(Container(self.column_viewer, "Columns"))
+        self.side_bar.addWidget(Container(self.auto_filter_viewer, "AutoFilters"))
 
     # Add a dock to the MainWindow widget
     def add_view(self, widget: QtWidgets.QWidget, title: str):

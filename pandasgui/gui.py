@@ -61,6 +61,14 @@ class PandasGui(QtWidgets.QMainWindow):
 
         refs.append(self)
 
+        # FF: The first element PandasGuiStore, a data class is created in PandasGui(MainWindow)
+        # FF: PandasGuiStore is the manger of DataFrame and Gui objects
+        # FF:       PandasGuiStore.add_dataframe
+        # FF:       PandasGuiStore.remove_dataframe
+        # FF:       PandasGuiStore.import_file
+        # FF:       etc.
+        # FF: PandasGuiStore.add_dataframe, PandasGuiStore.add_items is most important function to add DataFrame
+        # FF: as PGDF to the PandasGuiStore.data, and [name, shape] to the navigator items.
         self.store = PandasGuiStore()
         self.store.gui = self
         # Add user provided settings to data store
@@ -503,12 +511,13 @@ def show(*args,
 
     kwargs = {**kwargs, **items}
 
+    # FF: PandasGui is the MainWindow it contains, navigator, Filter, Columns, DataFrameExplorer
     pandas_gui = PandasGui(settings=settings, **kwargs)
     pandas_gui.caller_stack = inspect.currentframe().f_back
 
     # Register IPython magic
     try:
-        @register_line_magic
+        @register_line_magic # FF how it works and what's it for
         def pg(line):
             pandas_gui.store.eval_magic(line)
             return line
@@ -533,4 +542,4 @@ def show(*args,
 if __name__ == "__main__":
     from pandasgui.datasets import pokemon, titanic, mi_manufacturing, trump_tweets, all_datasets
 
-    gui = show(pokemon, titanic, mi_manufacturing)
+    gui = show(titanic, pokemon)

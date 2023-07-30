@@ -188,12 +188,14 @@ class FuncUi(QtWidgets.QWidget):
     finished = QtCore.pyqtSignal()
     saving = QtCore.pyqtSignal()
 
-    def __init__(self, pgdf, schema: Schema = None):
+    def __init__(self, pgdf: PandasGuiDataFrameStore, schema: Schema = None):
         super().__init__()
         self.remembered_values = {}
 
         self.schema = schema
         self.pgdf: PandasGuiDataFrameStore = pgdf
+        # FF: FuncUI.df is flattened, a NEW copy of pgdf.df is created
+        # FF: Can we avoid it? this df could be very memory consuming.
         self.df = flatten_df(pgdf.df)
 
         # Custom kwargs dialog
@@ -217,14 +219,14 @@ class FuncUi(QtWidgets.QWidget):
             format_kwargs(self.get_data())))
 
         # Sources list
-        self.source_tree = SourceTree(self.df)
-        self.source_tree2 = SourceTree(self.df)
+        self.source_tree = SourceTree(pgdf)  ## FF: self.df DataFrame type is a copy of pgdf.df of. SourceTree will cast it to PGDF a NEW copy is made and ref by SourceTree.pgdf.
+        self.source_tree2 = SourceTree(pgdf) ## FF: this is too a NEW copy is created. Can we reuse PGDF instead to create one?
 
         # Eval script
         self.eval_script = QtWidgets.QPlainTextEdit()
 
         # Destinations tree
-        self.dest_tree = DestinationTree(self)
+        self.dest_tree = DestinationTree(self) # FF: This NO copy of df is created
         self.dest_tree.setHeaderLabels(['Name', 'Value'])
 
         # Set schema

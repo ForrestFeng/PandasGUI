@@ -37,12 +37,20 @@ class Reshaper(QtWidgets.QWidget):
         self.error_console_wrapper.setContent(self.error_console)
         self.error_console_wrapper.setChecked(False)
 
+        # FF: schemas is a global var defines (name, lable, func, icon) for pivot, melt, concat functions.
         for schema in schemas:
             icon = QtGui.QIcon(schema.icon_path)
             text = schema.label
             item = QtWidgets.QListWidgetItem(icon, text)
             self.type_picker.addItem(item)
-
+        # FF: like FuncUi in Grapher, here FuncUi is a part of Reshaper to create new DataFrame. It contains source tree with contains a copy of pgdf.df with flattern
+        # FF: Because FuncUi contains two SourceTree refer which in turn hold two NEW copy of pgdf.df with this logic:
+        # FF:       FuncUi.__init__(PandasGuiDataFrameStore) --> self.pgdf = PandasGuiDataFrameStore,
+        #                                     self.df = flatten_df(pgdf.df)
+        # FF:                                 self.source_tree = SourceTree(self.df) NOTE: here is the PGDF.df a DataFrame
+        # FF:                                                        --> Supper ColumnViewer.__init__(PandasGuiDataFrameStore)  NOTE: Though the here expect PandasGuiDataFrameStore we pass a OGDF.df DatFrame to it
+        # FF:                                                                   --> ColumnViewer.update_df(df)
+        # FF:                                                                       --> ColumnViewer.pgdf = PandasGuiDataFrameStore.cast(df)  NOTE: here a NEW copy is created from PGDF.df
         self.func_ui = FuncUi(pgdf=pgdf, schema=Schema())
 
         # Layouts

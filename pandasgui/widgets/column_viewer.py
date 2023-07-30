@@ -86,7 +86,7 @@ class ColumnViewer(QtWidgets.QWidget):
         self.update_df(pgdf)
 
     def update_df(self, df):
-        pgdf = PandasGuiDataFrameStore.cast(df)
+        pgdf = PandasGuiDataFrameStore.cast(df)  # If a df is not PGDF a NEW copy will be created. It is a wast of memory!
 
         self.pgdf = pgdf
         self.refresh()

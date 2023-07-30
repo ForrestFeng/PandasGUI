@@ -3,7 +3,7 @@ import re
 import sys
 
 from PyQt5 import QtCore, QtGui, QtWidgets
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QDesktopServices
 from PyQt5.QtCore import QUrl
 from pandasgui.utility import nunique, unique
@@ -53,6 +53,7 @@ class Completer(QtWidgets.QCompleter):
 
 
 class FilterViewer(QtWidgets.QWidget):
+    onDropSignal = pyqtSignal()
     def __init__(self, pgdf: PandasGuiDataFrameStore):
         super().__init__()
         pgdf = PandasGuiDataFrameStore.cast(pgdf)
@@ -66,7 +67,7 @@ class FilterViewer(QtWidgets.QWidget):
         # autocompletion for QLineEdit
         columns = self.pgdf.df_unfiltered.columns
         valid_values = [f"`{col}`" for col in columns]
-        categoricals = columns[self.pgdf.df_unfiltered.dtypes == "category"]
+        categoricals = columns[self.pgdf.df_unfiltered.dtypes == "category"]               # FF: handle category type
         low_cardinality = columns[nunique(self.pgdf.df_unfiltered) < CATEGORICAL_THRESHOLD]
 
         # make unique the column names

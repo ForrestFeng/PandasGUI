@@ -85,6 +85,15 @@ class Grapher(QtWidgets.QWidget):
         self.error_console_wrapper.setContent(self.error_console)
         self.error_console_wrapper.setChecked(False)
 
+        # FF: schemas is a global var defines (name, label, function, icon) to generate the bar, scatter, line, histogram chart in the Graph object
+        # FF: Grapher, DataFrameViewer, StatisticsViewer, Reshaper, CodeHistoryViewer are holded by the DataFrameExplorer
+        # FF: The DataFrameExplorer is ref as PGDF.dataframe_explorer
+        # FF: The PandasGuiStore object is managed as a dict of PandasGuiStore.data[name, PandasGuiStore]
+        # FF: The PandGuiStore is managed by PandGui.store = PandasGuiStore()
+        # FF: The PandasGuiStore use
+        #                      self.add_dataframe(name, DataFrame ot PandasGuiStore) add a DataFrame(cast to PandasGuiStore) or PGDF
+        #                      self.add_item(pgdf, name, shape) to PandasGuiStore.data[name, PandasGuiStore] and add navigator item [name, shape] to PGDF.navigator
+
         for schema in schemas:
             icon = QtGui.QIcon(schema.icon_path)
             text = schema.label
@@ -92,8 +101,8 @@ class Grapher(QtWidgets.QWidget):
             self.type_picker.addItem(item)
 
         # UI setup
-        self.figure_viewer = FigureViewer(store=self.pgdf.store)
-        self.func_ui = FuncUi(pgdf, schema=Schema())
+        self.figure_viewer = FigureViewer(store=self.pgdf.store)  # FF: FigureViewer ref to pgdf.PandasGuiStore NO copy for pgdf.df is copied
+        self.func_ui = FuncUi(pgdf, schema=Schema())  # FF: FuncUi is a part of Graph to create different charts. It contains source tree with contains a copy of pgdf.df
 
         # Layouts
         self.plot_splitter = QtWidgets.QSplitter(Qt.Horizontal)

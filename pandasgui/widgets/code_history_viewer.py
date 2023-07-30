@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 class CodeHistoryViewer(QtWidgets.QFrame):
     def __init__(self, pgdf: PandasGuiDataFrameStore):
         super().__init__()
-        pgdf = PandasGuiDataFrameStore.cast(pgdf)
+        pgdf = PandasGuiDataFrameStore.cast(pgdf)  #
         pgdf.filter_viewer = self
         self.pgdf = pgdf
 

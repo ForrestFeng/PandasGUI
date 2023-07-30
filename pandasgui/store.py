@@ -1,7 +1,12 @@
 from __future__ import annotations
+
+import functools
 import typing
 import numpy
 from abc import abstractmethod
+
+from pandasgui.automation.filters_loader import run_static_methods
+
 
 if typing.TYPE_CHECKING:
     from pandasgui.gui import PandasGui
@@ -9,9 +14,10 @@ if typing.TYPE_CHECKING:
     from pandasgui.widgets.dataframe_viewer import DataFrameViewer
     from pandasgui.widgets.dataframe_explorer import DataFrameExplorer
     from pandasgui.widgets.navigator import Navigator
+    from pandasgui.widgets.auto_filter_viewer import AutoFilterViewer
 
 from dataclasses import dataclass, field
-from typing import Iterable, List, Union
+from typing import Iterable, List, Union, Dict
 from typing_extensions import Literal, TypedDict
 import pandas as pd
 from pandas import DataFrame
@@ -294,7 +300,7 @@ class PandasGuiDataFrameStore(PandasGuiStoreItem):
         df = df.copy()
 
         self.df: DataFrame = df
-        self.ndarray: numpy.array = df.to_numpy()
+        self.ndarray: numpy.array = None
         self.df_unfiltered: DataFrame = df
         self.name = name
 
@@ -309,6 +315,7 @@ class PandasGuiDataFrameStore(PandasGuiStoreItem):
         self.dataframe_viewer: Union[DataFrameViewer, None] = None
         self.stats_viewer: Union[DataFrameViewer, None] = None
         self.filter_viewer: Union[FilterViewer, None] = None
+        self.auto_filter_viewer: Union[AutoFilterViewer, None] = None
 
         self.sorted_column_name: Union[str, None] = None
         self.sorted_index_level: Union[int, None] = None
@@ -316,6 +323,9 @@ class PandasGuiDataFrameStore(PandasGuiStoreItem):
 
         self.filters: List[Filter] = []
         self.filtered_index_map = df.reset_index().index
+
+        # auto filter
+        self.auto_filters: typing.Dict[List, int] = {}
 
         # Statistics
         self.column_statistics = None
@@ -354,7 +364,7 @@ class PandasGuiDataFrameStore(PandasGuiStoreItem):
             }, index=df.columns
             )
 
-            df = self.df.transpose()
+            df = self.df.transpose()  # FF: transpose is slow, if yes replace this with better logic.
             df_numeric = self.df.select_dtypes('number').transpose()
             self.row_statistics = pd.DataFrame({
                 # "Type": df.dtypes.astype(str),
@@ -426,7 +436,7 @@ class PandasGuiDataFrameStore(PandasGuiStoreItem):
 
     @status_message_decorator("Pasting data...")
     def paste_data(self, top_row, left_col, df_to_paste):
-        new_df = self.df_unfiltered.copy()
+        new_df = self.df_unfiltered.copy()           # FF: PERF this is expensive... avoid it?
 
         # Not using iat here because it won't work with MultiIndex
         for i in range(df_to_paste.shape[0]):
@@ -587,6 +597,75 @@ class PandasGuiDataFrameStore(PandasGuiStoreItem):
         self.add_history_item("change_column_type",
                               f"df[{name}] = df[{name}].astype({type})")
 
+
+    ###################################
+    # Auto Filters
+    def set_auto_filter(self, auto_filters: Dict[List, int]):
+
+        self.auto_filters = auto_filters
+
+        # the auto_filter is a dict with prefix => radio_index
+        # radio_index = -1: filter is inactive
+        # radio_index in [0, x]: filter is active
+        # radio_index of the same value, the filter results apply or logic (|)
+        # radio_index of low and higher, the results apply and logic (&)
+
+        keys = list(auto_filters.keys())
+        values = list(auto_filters.values())
+        sorted_value_index = numpy.argsort(values)
+        sorted_dict = {keys[i]: values[i] for i in sorted_value_index}
+        print(sorted_dict)
+
+        # sorted dict with value from low to high
+        ors = []
+        ands = []
+        for i in sorted_value_index:
+            key = keys[i]
+            value = values[i]
+            # Only care the active ones
+            if value >= 0:
+                if len(ors) == 0:
+                    ors.append((key, value))
+                else:
+                    if ors[-1][1] == value:
+                        ors.append((key, value))
+                    elif ors[-1][1] < value:
+                        # save value ends, add it to ands list
+                        ands.append(ors)
+                        # then create new ords
+                        ors = [(key, value)]
+                    else:
+                        raise Exception(f"The value order is wrong {keys} {values}")
+        # add the last ors to ands
+        ands.append(ors)
+        print(ands)
+
+        # TODO: if no filter s do not copy the df.
+        # TODO: If there are filters, catch the result of each fitler
+
+        df = self.df_unfiltered.copy()             # FF: PERF this is expensive ...
+        df['_temp_range_index'] = df.reset_index().index
+
+        # Now we can apply the filters
+        bool_ands = []
+        for ors in ands:
+            bool_ors = []
+            for or_, val in ors:
+                bool_ors.append(run_static_methods(or_[0], or_[1], or_[2], df))
+            if len(bool_ors) > 0:
+                ors_result = functools.reduce(lambda a, b: a | b, bool_ors)
+                bool_ands.append(ors_result)
+        if len(bool_ands) > 0:
+            ands_result = functools.reduce(lambda a, b: a & b, bool_ands)
+            df = df[ands_result]
+
+        # self.filtered_index_map is used elsewhere to map unfiltered index to filtered index
+        self.filtered_index_map = df['_temp_range_index'].reset_index(drop=True)
+        df = df.drop('_temp_range_index', axis=1)            # FF: PERF this is slow. it makes a copy...
+
+        self.df = df
+        self.data_changed()
+
     ###################################
     # Filters
 
@@ -614,13 +693,13 @@ class PandasGuiDataFrameStore(PandasGuiStoreItem):
 
     @status_message_decorator("Applying filters...")
     def apply_filters(self):
-        df = self.df_unfiltered.copy()
+        df = self.df_unfiltered.copy()             # FF: PERF this is expensive ...
         df['_temp_range_index'] = df.reset_index().index
 
         for ix, filt in enumerate(self.filters):
             if filt.enabled and not filt.failed:
                 try:
-                    df = df.query(filt.expr, engine='python')
+                    df = df.query(filt.expr, engine='python')  # FF: PERF this is slow. each time make a copy...
                     # Handle case where filter returns only one row
                     if isinstance(df, pd.Series):
                         df = df.to_frame().T
@@ -630,7 +709,7 @@ class PandasGuiDataFrameStore(PandasGuiStoreItem):
 
         # self.filtered_index_map is used elsewhere to map unfiltered index to filtered index
         self.filtered_index_map = df['_temp_range_index'].reset_index(drop=True)
-        df = df.drop('_temp_range_index', axis=1)
+        df = df.drop('_temp_range_index', axis=1)            # FF: PERF this is slow. it makes a copy...
 
         self.df = df
         self.data_changed()
@@ -707,9 +786,9 @@ class PandasGuiDataFrameStore(PandasGuiStoreItem):
     @staticmethod
     def cast(df: Union[PandasGuiDataFrameStore, pd.DataFrame, pd.Series, Iterable]):
         if isinstance(df, PandasGuiDataFrameStore):
-            return df
+            return df                                 # FF: PGDF to PGDF just reuse, NO copy.
         if isinstance(df, pd.DataFrame):
-            return PandasGuiDataFrameStore(df.copy())
+            return PandasGuiDataFrameStore(df.copy()) # FF: PERF DF to PGDF will create a NEW copy of df
         elif isinstance(df, pd.Series):
             return PandasGuiDataFrameStore(df.to_frame())
         else:
@@ -812,7 +891,7 @@ class PandasGuiStore:
         self.gui.navigator.remove_item(name)
         self.gui.stacked_widget.removeWidget(widget)
 
-    @status_message_decorator("Adding DataFrame...")
+    #@status_message_decorator("Adding DataFrame...")
     def add_dataframe(self, pgdf: Union[DataFrame, PandasGuiDataFrameStore],
                       name: str = "Untitled"):
 
@@ -830,6 +909,8 @@ class PandasGuiStore:
 
         if pgdf.dataframe_explorer is None:
             from pandasgui.widgets.dataframe_explorer import DataFrameExplorer
+            # FF: The DataFrameExplorer is the most right part of the GUI for DataFrameViewer, Grapher, Reshaper
+            # FF: Any time a new PGDF is added to GuiStore a DataFrameExplorer will be created
             pgdf.dataframe_explorer = DataFrameExplorer(pgdf)
 
         # Add to nav
