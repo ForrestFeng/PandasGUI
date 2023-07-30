@@ -32,6 +32,8 @@ class DataFrameViewer(QtWidgets.QWidget):
 
         # Set up DataFrame TableView and Model
         self.dataView = DataTableView(parent=self)
+        # TODO: not work
+        #self.dataView.setSelectionMode(QtWidgets.QTableView.SelectionMode.ExtendedSelection)
 
         # Create headers
         self.columnHeader = HeaderView(parent=self, orientation=Qt.Horizontal)
@@ -407,6 +409,12 @@ class DataTableModel(QtCore.QAbstractTableModel):
             if color_mode == None or pd.isna(cell):
                 return None
 
+            # data viewer highlight the row index
+            if self.pgdf.df_highlight_row_index is not None and self.pgdf.df_highlight_row_index[row]:
+                return QtGui.QColor(QtGui.QColor(0, 125, 0, int(255 * 0.5)))
+
+
+            # data viewer color by row, col, all, None logic
             try:
                 x = float(cell)
             except:

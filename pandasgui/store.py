@@ -5,7 +5,7 @@ import typing
 import numpy
 from abc import abstractmethod
 
-from pandasgui.automation.filters_loader import run_static_methods
+from pandasgui.automation.filters_loader import PgPluginLoader
 
 
 if typing.TYPE_CHECKING:
@@ -14,7 +14,7 @@ if typing.TYPE_CHECKING:
     from pandasgui.widgets.dataframe_viewer import DataFrameViewer
     from pandasgui.widgets.dataframe_explorer import DataFrameExplorer
     from pandasgui.widgets.navigator import Navigator
-    from pandasgui.widgets.auto_filter_viewer import AutoFilterViewer
+    from pandasgui.widgets.supper_filter_viewer import SupperFilterModel, SupperFilterViewer
 
 from dataclasses import dataclass, field
 from typing import Iterable, List, Union, Dict
@@ -300,6 +300,7 @@ class PandasGuiDataFrameStore(PandasGuiStoreItem):
         df = df.copy()
 
         self.df: DataFrame = df
+        self.df_highlight_row_index = None
         self.ndarray: numpy.array = None
         self.df_unfiltered: DataFrame = df
         self.name = name
@@ -315,7 +316,7 @@ class PandasGuiDataFrameStore(PandasGuiStoreItem):
         self.dataframe_viewer: Union[DataFrameViewer, None] = None
         self.stats_viewer: Union[DataFrameViewer, None] = None
         self.filter_viewer: Union[FilterViewer, None] = None
-        self.auto_filter_viewer: Union[AutoFilterViewer, None] = None
+        self.supper_filter_viewer: Union[SupperFilterViewer, None] = None
 
         self.sorted_column_name: Union[str, None] = None
         self.sorted_index_level: Union[int, None] = None
@@ -325,7 +326,7 @@ class PandasGuiDataFrameStore(PandasGuiStoreItem):
         self.filtered_index_map = df.reset_index().index
 
         # auto filter
-        self.auto_filters: typing.Dict[List, int] = {}
+        self.supper_filters: typing.Dict[List, int] = {}
 
         # Statistics
         self.column_statistics = None
@@ -599,65 +600,43 @@ class PandasGuiDataFrameStore(PandasGuiStoreItem):
 
 
     ###################################
-    # Auto Filters
-    def set_auto_filter(self, auto_filters: Dict[List, int]):
+    # Supper Filters
 
-        self.auto_filters = auto_filters
+    def apply_supper_filter(self, enabled_filters: Dict[tuple, int], inspect_index: int, model: SupperFilterModel):
 
-        # the auto_filter is a dict with prefix => radio_index
-        # radio_index = -1: filter is inactive
-        # radio_index in [0, x]: filter is active
-        # radio_index of the same value, the filter results apply or logic (|)
-        # radio_index of low and higher, the results apply and logic (&)
+        # Enabled Filters in the form of [ [F1, F2], [F3], [F4, F5] ]
+        self.supper_filters = enabled_filters
+        self.df_highlight_row_index = None
 
-        keys = list(auto_filters.keys())
-        values = list(auto_filters.values())
-        sorted_value_index = numpy.argsort(values)
-        sorted_dict = {keys[i]: values[i] for i in sorted_value_index}
-        print(sorted_dict)
-
-        # sorted dict with value from low to high
-        ors = []
-        ands = []
-        for i in sorted_value_index:
-            key = keys[i]
-            value = values[i]
-            # Only care the active ones
-            if value >= 0:
-                if len(ors) == 0:
-                    ors.append((key, value))
-                else:
-                    if ors[-1][1] == value:
-                        ors.append((key, value))
-                    elif ors[-1][1] < value:
-                        # save value ends, add it to ands list
-                        ands.append(ors)
-                        # then create new ords
-                        ors = [(key, value)]
-                    else:
-                        raise Exception(f"The value order is wrong {keys} {values}")
-        # add the last ors to ands
-        ands.append(ors)
-        print(ands)
-
-        # TODO: if no filter s do not copy the df.
-        # TODO: If there are filters, catch the result of each fitler
+        # TODO: If there are filters, catch the result of each filter
 
         df = self.df_unfiltered.copy()             # FF: PERF this is expensive ...
         df['_temp_range_index'] = df.reset_index().index
+        filter_result_at_inspect_index = None
 
         # Now we can apply the filters
         bool_ands = []
-        for ors in ands:
+        for ors in enabled_filters:
             bool_ors = []
-            for or_, val in ors:
-                bool_ors.append(run_static_methods(or_[0], or_[1], or_[2], df))
+            for m_c_m, radio_index in ors:
+                # TODO: logic error
+                if inspect_index <= -1 or radio_index < inspect_index:
+                    bool_ors.append(model.apply_supper_filter(m_c_m[0], m_c_m[1], m_c_m[2], df))
+                # calculate the highlight row index filter result
+                if -1 < inspect_index == radio_index:
+                    filter_result_at_inspect_index = model.apply_supper_filter(m_c_m[0], m_c_m[1], m_c_m[2], df)
+
             if len(bool_ors) > 0:
                 ors_result = functools.reduce(lambda a, b: a | b, bool_ors)
                 bool_ands.append(ors_result)
+
         if len(bool_ands) > 0:
             ands_result = functools.reduce(lambda a, b: a & b, bool_ands)
             df = df[ands_result]
+
+            # df highlight row index
+            if filter_result_at_inspect_index is not None:
+                self.df_highlight_row_index = ands_result & filter_result_at_inspect_index
 
         # self.filtered_index_map is used elsewhere to map unfiltered index to filtered index
         self.filtered_index_map = df['_temp_range_index'].reset_index(drop=True)
