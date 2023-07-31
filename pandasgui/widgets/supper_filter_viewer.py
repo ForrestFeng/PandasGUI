@@ -48,7 +48,7 @@ class SupperFilterViewer(QtWidgets.QWidget):
     def supperFilterChagned(self, supper_filters: Dict[tuple, int], inspecting_index: int, model: SupperFilterModel):
 
         # convert supper_filters from list of Dict[tuple, int]
-        # to [ [F1, F2], [F3], [F4, F5] ]
+        # to [ [(F1, idx), (F2, idx)], [(F3, idx)], [(F4, idx), (F5, idx)] ]
 
         # the auto_filter is a dict with (module, class, method) => radio_index
         # radio_index = -1: filter is inactive

@@ -612,7 +612,7 @@ class PandasGuiDataFrameStore(PandasGuiStoreItem):
 
         df = self.df_unfiltered.copy()             # FF: PERF this is expensive ...
         df['_temp_range_index'] = df.reset_index().index
-        filter_result_at_inspect_index = None
+        bool_ors_at_inspect_index = []
 
         # Now we can apply the filters
         bool_ands = []
@@ -620,12 +620,13 @@ class PandasGuiDataFrameStore(PandasGuiStoreItem):
             bool_ors = []
             for m_c_m, radio_index in ors:
                 # TODO: logic error
+                if -1 < inspect_index < radio_index:
+                    break
                 if inspect_index <= -1 or radio_index < inspect_index:
                     bool_ors.append(model.apply_supper_filter(m_c_m[0], m_c_m[1], m_c_m[2], df))
-                # calculate the highlight row index filter result
+                # for the highlight ors
                 if -1 < inspect_index == radio_index:
-                    filter_result_at_inspect_index = model.apply_supper_filter(m_c_m[0], m_c_m[1], m_c_m[2], df)
-
+                    bool_ors_at_inspect_index.append(model.apply_supper_filter(m_c_m[0], m_c_m[1], m_c_m[2], df))
             if len(bool_ors) > 0:
                 ors_result = functools.reduce(lambda a, b: a | b, bool_ors)
                 bool_ands.append(ors_result)
@@ -633,10 +634,10 @@ class PandasGuiDataFrameStore(PandasGuiStoreItem):
         if len(bool_ands) > 0:
             ands_result = functools.reduce(lambda a, b: a & b, bool_ands)
             df = df[ands_result]
-
             # df highlight row index
-            if filter_result_at_inspect_index is not None:
-                self.df_highlight_row_index = ands_result & filter_result_at_inspect_index
+            if len(bool_ors_at_inspect_index) > 0:
+                ors_result_at_inspect_index = functools.reduce(lambda a, b: a | b, bool_ors_at_inspect_index)
+                self.df_highlight_row_index = ands_result & ors_result_at_inspect_index
 
         # self.filtered_index_map is used elsewhere to map unfiltered index to filtered index
         self.filtered_index_map = df['_temp_range_index'].reset_index(drop=True)
