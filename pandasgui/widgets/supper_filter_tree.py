@@ -37,7 +37,7 @@ class SupperFilterModel:
 
 
 class SupperFilterTree(FlatDraggableTree):
-    onSupperFilterChangedEvent = pyqtSignal(dict, int, SupperFilterModel)
+    onSupperFilterChangedEvent = pyqtSignal(dict, list, SupperFilterModel)
     FILTER_LEVEL = 6
     def __init__(self):
         super().__init__()
@@ -54,7 +54,7 @@ class SupperFilterTree(FlatDraggableTree):
         self.supper_filters: Dict[tuple, int] = {}
 
         # Tracking the active inspecting index
-        self.inspecting_index = -1
+        self.inspecting_index_arg = [-1, -1]
 
         # Init
         self.add_items_with_radio_buttons()
@@ -134,14 +134,14 @@ class SupperFilterTree(FlatDraggableTree):
             group.setExclusive(False)
             button.setChecked(False)
             group.setProperty("last_checked_id", -1)
-            self.inspecting_index = -1
+            self.inspecting_index_arg = [-1, -1]
         else:
             # for other case set Exclusive to True
             group.setExclusive(True)
 
         if button.isChecked():
             group.setProperty("last_checked_id", group.id(button))
-            self.inspecting_index = group.id(button)
+            self.inspecting_index_arg = [group.id(button), -1]
             logger.debug(f"Inspecting Checkbox: remember the checked button {group.property('prefix')[1:]} at ({group.property('row')},{group.id(button)})")
 
         logger.debug(
@@ -149,7 +149,7 @@ class SupperFilterTree(FlatDraggableTree):
 
 
         # emit checkbox change
-        self.onSupperFilterChangedEvent.emit(self.supper_filters, self.inspecting_index, self.model)
+        self.onSupperFilterChangedEvent.emit(self.supper_filters, self.inspecting_index_arg, self.model)
 
     def on_radio_button_clicked(self, button: QtWidgets.QRadioButton):
         # GUI logic to make the radio button on off as designed.
@@ -177,7 +177,7 @@ class SupperFilterTree(FlatDraggableTree):
             f"Filter RadioButton: {group.property('prefix')[1:]} at ({group.property('row')},{group.id(button)}) Checked: {button.isChecked()}")
 
         # emit filter changed signal
-        self.onSupperFilterChangedEvent.emit(self.supper_filters, self.inspecting_index, self.model)
+        self.onSupperFilterChangedEvent.emit(self.supper_filters, self.inspecting_index_arg, self.model)
 
 
     def add_new_column(self, column_label):

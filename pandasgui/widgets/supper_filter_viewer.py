@@ -1,7 +1,7 @@
 
 import numpy
 import sys
-from typing import Dict
+from typing import Dict, List
 
 from pandasgui.widgets.column_viewer import FlatDraggableTree
 from pandasgui.widgets.supper_filter_tree import SupperFilterTree, SupperFilterModel
@@ -43,14 +43,21 @@ class SupperFilterViewer(QtWidgets.QWidget):
         # link the singal
         self.tree.onSupperFilterChangedEvent.connect(self.supperFilterChagned)
 
+    @QtCore.pyqtSlot(dict, list, SupperFilterModel)
+    def supperFilterChagned(self, supper_filters: Dict[tuple, int], inspecting_index_arg: [int, int], model: SupperFilterModel):
 
-    @QtCore.pyqtSlot(dict, int, SupperFilterModel)
-    def supperFilterChagned(self, supper_filters: Dict[tuple, int], inspecting_index: int, model: SupperFilterModel):
+        # Convert supper_filters from list of Dict[Fn, idx]
+        # to InOutArg in the form of
+        # [ [[(F1, idx), n], [(F2, idx), n]],
+        #   [[(F3, idx), n]],
+        #   [[(F4, idx), n], [(F5, idx), n]]
+        # ]
 
-        # convert supper_filters from list of Dict[tuple, int]
-        # to [ [(F1, idx), (F2, idx)], [(F3, idx)], [(F4, idx), (F5, idx)] ]
+        # The Fn stands for filter full name m_c_m, idx is the filter level in 0 to max_level
+        # The n here is the number rows selected for the corresponding filter.
+        # The InOutArg is for both input and output.
 
-        # the auto_filter is a dict with (module, class, method) => radio_index
+        # the supper filter is a dict with (module, class, method) => radio_index
         # radio_index = -1: filter is inactive
         # radio_index in [0, x]: filter is active
         # radio_index of the same radio_index, the filter results apply or logic (|)
@@ -71,15 +78,15 @@ class SupperFilterViewer(QtWidgets.QWidget):
             # Only care the active ones
             if radio_index >= 0:
                 if len(enabled_ors) == 0:
-                    enabled_ors.append((m_c_m_key, radio_index))
-                else:
-                    if enabled_ors[-1][1] == radio_index:
+                    enabled_ors.append([(m_c_m_key, radio_index), -1])
+                else: # > 0
+                    if enabled_ors[-1][0][1] == radio_index:
                         enabled_ors.append((m_c_m_key, radio_index))
-                    elif enabled_ors[-1][1] < radio_index:
+                    elif enabled_ors[-1][0][1] < radio_index:
                         # save radio_index ends, add it to enabled_ands list
                         enabled_ands.append(enabled_ors)
                         # then create new ords
-                        enabled_ors = [(m_c_m_key, radio_index)]
+                        enabled_ors = [[(m_c_m_key, radio_index), -1]]
                     else:
                         raise Exception(f"The radio_index order is wrong {keys} {values}")
         # add the last enabled_ors to enabled_ands
@@ -87,7 +94,10 @@ class SupperFilterViewer(QtWidgets.QWidget):
         logger.debug(enabled_ands)
 
         if self.pgdf is not None:
-            self.pgdf.apply_supper_filter(enabled_ands, inspecting_index, model)
+            self.pgdf.apply_supper_filter(enabled_ands, inspecting_index_arg, model)
+            print(enabled_ands)
+            print(inspecting_index_arg)
+
 
     def refresh(self):
         # Depends on Search Box and Source list

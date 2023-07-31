@@ -602,9 +602,16 @@ class PandasGuiDataFrameStore(PandasGuiStoreItem):
     ###################################
     # Supper Filters
 
-    def apply_supper_filter(self, enabled_filters: Dict[tuple, int], inspect_index: int, model: SupperFilterModel):
+    def apply_supper_filter(self, enabled_filters: Dict[tuple, int], inspect_index_arg: Dict[int, int], model: SupperFilterModel):
 
-        # Enabled Filters in the form of [ [F1, F2], [F3], [F4, F5] ]
+        # The enabled_filters in the form of
+        # [ [[(F1,idx), n], [(F2,idx), n]],  # with two or_cells
+        #   [[(F3,idx), n]],                 # with one or_cell
+        #   [[(F4,idx), n], [(F5,idx), n]]   # with two or_cells
+        # ]
+        # The inspect_index_dic in the form of
+        # [inspect_index,n]
+
         self.supper_filters = enabled_filters
         self.df_highlight_row_index = None
 
@@ -613,23 +620,63 @@ class PandasGuiDataFrameStore(PandasGuiStoreItem):
         df = self.df_unfiltered.copy()             # FF: PERF this is expensive ...
         df['_temp_range_index'] = df.reset_index().index
         bool_ors_at_inspect_index = []
+        inspect_index = inspect_index_arg[0]
+        ##### inspect_index_arg[1] = 99
+
+
+        # Dict[radio_index, or_Fx_result], catch the Fx or logic result value
+        Or_Fx = {}
+
+        # Get the Or_Fx at level i
+        def Or_Fx_at(i):
+            return Or_Fx[i]
+
+        # Fx is the filter-result based on df
+        def Fx_for(m_c_m):
+            return model.apply_supper_filter(m_c_m[0], m_c_m[1], m_c_m[2], df)
+
+        # Calculate total output (all Fx contribution) at level i
+        # i level, same meaning as radio_index
+        def I(i):
+            if i == 0:
+                return Or_Fx_at(0)
+            return I(i-1) & Or_Fx_at(i)
+
+        # Calculate individual Fx output at level i
+        # Fxi, we name it Fx_at(i).
+        # Fx_at(i) is the filter-result based on previous level filter output df
+        def Fx_at(i, m_c_m):
+            return I(i - 1) & Fx_for(m_c_m)
+
+        # Calculate input for level i
+        # I'(i), we name it I_ck(i)
+        # I_ck when the checkbox is checked, it shows previous level output result
+        # It is used to show user the context for selected records
+        def I_ck(i):
+            return I(i-1)
 
         # Now we can apply the filters
         bool_ands = []
         for ors in enabled_filters:
             bool_ors = []
-            for m_c_m, radio_index in ors:
-                # TODO: logic error
+            for or_cell in ors:
+                m_c_m, radio_index = or_cell[0]
+                #### or_cel[1] = 100
                 if -1 < inspect_index < radio_index:
                     break
                 if inspect_index <= -1 or radio_index < inspect_index:
-                    bool_ors.append(model.apply_supper_filter(m_c_m[0], m_c_m[1], m_c_m[2], df))
+                    Fx = Fx_for(m_c_m)
+                    bool_ors.append(Fx)
+                    or_cell[1] = Fx
                 # for the highlight ors
                 if -1 < inspect_index == radio_index:
-                    bool_ors_at_inspect_index.append(model.apply_supper_filter(m_c_m[0], m_c_m[1], m_c_m[2], df))
+                    Fx = Fx_for(m_c_m)
+                    bool_ors_at_inspect_index.append(Fx)
+                    or_cell[1] = Fx
             if len(bool_ors) > 0:
-                ors_result = functools.reduce(lambda a, b: a | b, bool_ors)
-                bool_ands.append(ors_result)
+                or_Fx_result = functools.reduce(lambda a, b: a | b, bool_ors)
+                bool_ands.append(or_Fx_result)
+                Or_Fx[radio_index] = or_Fx_result
 
         if len(bool_ands) > 0:
             ands_result = functools.reduce(lambda a, b: a & b, bool_ands)
@@ -638,6 +685,14 @@ class PandasGuiDataFrameStore(PandasGuiStoreItem):
             if len(bool_ors_at_inspect_index) > 0:
                 ors_result_at_inspect_index = functools.reduce(lambda a, b: a | b, bool_ors_at_inspect_index)
                 self.df_highlight_row_index = ands_result & ors_result_at_inspect_index
+
+        # Update n in or_cell e.g. calculate n for [(F4,idx), n], loop it again.
+        for ors in enabled_filters:
+            bool_ors = []
+            for or_cell in ors:
+                m_c_m, radio_index = or_cell[0]
+                or_cell[1] = Fx_at(radio_index, m_c_m)
+
 
         # self.filtered_index_map is used elsewhere to map unfiltered index to filtered index
         self.filtered_index_map = df['_temp_range_index'].reset_index(drop=True)
