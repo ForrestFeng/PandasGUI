@@ -111,17 +111,15 @@ class SupperFilterViewer(QtWidgets.QWidget):
 
             for ors in enabled_ands:
 
-                print(print(f"\nI'(input) Records: {ors[-1][-1]}"))
+                print(print(f"\nInput: {ors[-1][-1]}"))
                 for or_cell in ors[:-1]:
                     m_c_m, radio_index = or_cell[0]
                     count = or_cell[1]
-                    print(f"\tMethod: ({m_c_m[2]}, {radio_index}), Filtered Records: {count}")
-                print(f"I(output) Records: {ors[-1][0]}")
+                    print(f"\tMethod: ({m_c_m[2]}, {radio_index}), Filtered: {count}")
+                print(f"Output: {ors[-1][0]}")
 
                 if inspecting_index_arg[0] >= 0:
-                    print(f"Inspecting Enabled: Records {inspecting_index_arg[1]}")
-                else:
-                    print(f"Inspecting Disabled")
+                    print(f"Inspect:  {inspecting_index_arg[1]}")
 
 
     def refresh(self):

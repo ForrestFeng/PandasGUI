@@ -652,64 +652,67 @@ class PandasGuiDataFrameStore(PandasGuiStoreItem):
                 or_cell[-1] = Fx_for(m_c_m)
 
         ###################
-        # LOOP 2 I, I'
+        # LOOP 2 Output, Input
         for rank, ors in enumerate(enabled_filters):
-            # I' (input)
+            # Input
             if rank == 0:
-                # First I'
+                # First rank Input
                 ors[-1][-1] = True
             else:
-                # Other I' equal to previous I
+                # Other Input equal to previous I
                 ors[-1][-1] = enabled_filters[rank-1][-1][0]
 
             bool_ors = []
             for or_cell in ors[:-1]:
                 bool_ors.append(or_cell[-1])
 
-            # I (output) = I' & or( each cell Fx)
-            I = ors[-1][-1] & functools.reduce(lambda a, b: a | b, bool_ors)
-            ors[-1][0] = I
+            # Output = Input & or( each cell Fx)
+            Output = ors[-1][-1] & functools.reduce(lambda a, b: a | b, bool_ors)
+            ors[-1][0] = Output
 
             # Update df and inspect_index_arg
             if inspect_index == rank:
-                # I' is True?
+                # Input is the first rank
                 if ors[-1][-1] is True:
-                    inspect_index_arg[-1] = len(df.index)
-                    # do not filter the df as inspect_index is 0
-                    df_updated = True
-                else: # I' sum
-                    inspect_index_arg[-1] = ors[-1][-1].sum()
-                    # update df
-                    Ip = ors[-1][-1]
-                    df = df[Ip]
-                    df_updated = True
+                    inspect_index_arg[-1] = self.df_unfiltered.shape[0]
+                else: # Input is the second, or second+ rank
+                    Input = ors[-1][-1]
+                    inspect_index_arg[-1] = Input.sum()  # Input.sum
+                    break
 
 
         ###################
-        # LOOP 3 Update df; Fx, I', I to number
+        # LOOP 3 Update df; Fx, Input, Output to number
+        LastOutput = None
         for rank, ors in enumerate(enabled_filters):
             for or_cell in ors[:-1]:
                 m_c_m, radio_index = or_cell[0]
                 # Fx -> fx_at_level -> num
-                # filter at this level = I' & Fx
-                fx_at_level = ors[-1][-1] & or_cell[-1]
+                # filter at this level = Input & Fx
+                Input = ors[-1][-1]
+                fx_at_level = Input & or_cell[-1]
                 or_cell[-1] = fx_at_level.sum()
 
-            # I' -> num
-            if rank == 0:
-                # First I'
+            # Input -> num
+            if rank == 0:  # First Input
                 ors[-1][-1] = self.df_unfiltered.shape[0]
-            else:
-                # Other I' equal to previous I
-                ors[-1][-1] = enabled_filters[rank-1][-1][0]
+            else:          # 2+ Input
+                # Other Input equal to previous Out
+                PreOutput = enabled_filters[rank-1][-1][0]
+                ors[-1][-1] = PreOutput
 
-            # I
-            I = ors[-1][0]
-            if not df_updated:
-                df = df[I]
+            # Output to num
+            if inspect_index == rank:
+                if rank == 0:  # First rank
+                    LastOutput = ors[-1][0]
+                    ors[-1][0] = LastOutput.sum()
+                else:          # second+ rank
+                    LastOutput = ors[-1][0]
+                    ors[-1][0] = LastOutput.sum()
+                    break
 
-            # I to num
-            ors[-1][0] = I.sum()
+        if LastOutput is not None:
+            df = df[LastOutput]
 
         # self.filtered_index_map is used elsewhere to map unfiltered index to filtered index
         self.filtered_index_map = df['_temp_range_index'].reset_index(drop=True)

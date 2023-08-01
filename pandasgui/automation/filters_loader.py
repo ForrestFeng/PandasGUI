@@ -37,7 +37,7 @@ class PgPluginLoader:
     def run_static_methods(self, module: types.ModuleType, class_name:str, method_name:str, dataframe: pd.DataFrame):
         method = getattr(getattr(module, class_name), method_name)
         result = method(dataframe)
-        print(f"Module:{module.__name__} Class: {class_name}, Method: {method_name}, Result: {result}")
+        # print(f"Module:{module.__name__} Class: {class_name}, Method: {method_name}, Result: {result}")
         return result
 
     def get_modeul_methods(self):
