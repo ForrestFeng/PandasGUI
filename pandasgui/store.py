@@ -605,9 +605,9 @@ class PandasGuiDataFrameStore(PandasGuiStoreItem):
     def apply_supper_filter(self, enabled_filters: Dict[tuple, int], inspect_index_arg: Dict[int, int], model: SupperFilterModel):
 
         # The enabled_filters in the form of
-        # [ [[(F1,idx), n], [(F2,idx), n]],  # with two or_cells
-        #   [[(F3,idx), n]],                 # with one or_cell
-        #   [[(F4,idx), n], [(F5,idx), n]]   # with two or_cells
+        # [ [[(F1,idx), n], [(F2,idx), n], [I, I'] ],  # with two or_cells followed by [output I, input I']
+        #   [[(F3,idx), n], [I, I'] ],                 # with one or_cell  followed by [output I, input I']
+        #   [[(F4,idx), n], [(F5,idx), n], [I, I'] ]   # with two or_cells followed by [output I, input I']
         # ]
         # The inspect_index_dic in the form of
         # [inspect_index,n]
@@ -621,78 +621,95 @@ class PandasGuiDataFrameStore(PandasGuiStoreItem):
         df['_temp_range_index'] = df.reset_index().index
         bool_ors_at_inspect_index = []
         inspect_index = inspect_index_arg[0]
-        ##### inspect_index_arg[1] = 99
+        df_updated = False
 
-
-        # Dict[radio_index, or_Fx_result], catch the Fx or logic result value
-        Or_Fx = {}
-
-        # Get the Or_Fx at level i
-        def Or_Fx_at(i):
-            return Or_Fx[i]
+        # adjust inspect_index because it could point to wrong rank ors
+        if inspect_index > -1:
+            for rank, ors in enumerate(enabled_filters):
+                for or_cell in ors:
+                    m_c_m, radio_index = or_cell[0]
+                    break
+                if inspect_index == radio_index:
+                    inspect_index = rank
+                    break
+                elif inspect_index > radio_index:
+                    inspect_index = rank - 1
+                    break
+                elif inspect_index < radio_index:
+                    continue
+            assert (inspect_index == -1 or inspect_index < len(enabled_filters))
 
         # Fx is the filter-result based on df
         def Fx_for(m_c_m):
             return model.apply_supper_filter(m_c_m[0], m_c_m[1], m_c_m[2], df)
 
-        # Calculate total output (all Fx contribution) at level i
-        # i level, same meaning as radio_index
-        def I(i):
-            if i == 0:
-                return Or_Fx_at(0)
-            return I(i-1) & Or_Fx_at(i)
-
-        # Calculate individual Fx output at level i
-        # Fxi, we name it Fx_at(i).
-        # Fx_at(i) is the filter-result based on previous level filter output df
-        def Fx_at(i, m_c_m):
-            return I(i - 1) & Fx_for(m_c_m)
-
-        # Calculate input for level i
-        # I'(i), we name it I_ck(i)
-        # I_ck when the checkbox is checked, it shows previous level output result
-        # It is used to show user the context for selected records
-        def I_ck(i):
-            return I(i-1)
-
-        # Now we can apply the filters
-        bool_ands = []
+        # NEW LOGIC multiple loop easy to understand
+        ###################
+        # LOOP 1 n -> Fx
         for ors in enabled_filters:
-            bool_ors = []
-            for or_cell in ors:
+            for or_cell in ors[:-1]:
                 m_c_m, radio_index = or_cell[0]
-                #### or_cel[1] = 100
-                if -1 < inspect_index < radio_index:
-                    break
-                if inspect_index <= -1 or radio_index < inspect_index:
-                    Fx = Fx_for(m_c_m)
-                    bool_ors.append(Fx)
-                    or_cell[1] = Fx
-                # for the highlight ors
-                if -1 < inspect_index == radio_index:
-                    Fx = Fx_for(m_c_m)
-                    bool_ors_at_inspect_index.append(Fx)
-                    or_cell[1] = Fx
-            if len(bool_ors) > 0:
-                or_Fx_result = functools.reduce(lambda a, b: a | b, bool_ors)
-                bool_ands.append(or_Fx_result)
-                Or_Fx[radio_index] = or_Fx_result
+                or_cell[-1] = Fx_for(m_c_m)
 
-        if len(bool_ands) > 0:
-            ands_result = functools.reduce(lambda a, b: a & b, bool_ands)
-            df = df[ands_result]
-            # df highlight row index
-            if len(bool_ors_at_inspect_index) > 0:
-                ors_result_at_inspect_index = functools.reduce(lambda a, b: a | b, bool_ors_at_inspect_index)
-                self.df_highlight_row_index = ands_result & ors_result_at_inspect_index
+        ###################
+        # LOOP 2 I, I'
+        for rank, ors in enumerate(enabled_filters):
+            # I' (input)
+            if rank == 0:
+                # First I'
+                ors[-1][-1] = True
+            else:
+                # Other I' equal to previous I
+                ors[-1][-1] = enabled_filters[rank-1][-1][0]
 
-        # Update n in or_cell e.g. calculate n for [(F4,idx), n], loop it again.
-        for ors in enabled_filters:
             bool_ors = []
-            for or_cell in ors:
-                m_c_m, radio_index = or_cell[0]
-                or_cell[1] = Fx_at(radio_index, m_c_m)
+            for or_cell in ors[:-1]:
+                bool_ors.append(or_cell[-1])
 
+            # I (output) = I' & or( each cell Fx)
+            I = ors[-1][-1] & functools.reduce(lambda a, b: a | b, bool_ors)
+            ors[-1][0] = I
+
+            # Update df and inspect_index_arg
+            if inspect_index == rank:
+                # I' is True?
+                if ors[-1][-1] is True:
+                    inspect_index_arg[-1] = len(df.index)
+                    # do not filter the df as inspect_index is 0
+                    df_updated = True
+                else: # I' sum
+                    inspect_index_arg[-1] = ors[-1][-1].sum()
+                    # update df
+                    Ip = ors[-1][-1]
+                    df = df[Ip]
+                    df_updated = True
+
+
+        ###################
+        # LOOP 3 Update df; Fx, I', I to number
+        for rank, ors in enumerate(enabled_filters):
+            for or_cell in ors[:-1]:
+                m_c_m, radio_index = or_cell[0]
+                # Fx -> fx_at_level -> num
+                # filter at this level = I' & Fx
+                fx_at_level = ors[-1][-1] & or_cell[-1]
+                or_cell[-1] = fx_at_level.sum()
+
+            # I' -> num
+            if rank == 0:
+                # First I'
+                ors[-1][-1] = self.df_unfiltered.shape[0]
+            else:
+                # Other I' equal to previous I
+                ors[-1][-1] = enabled_filters[rank-1][-1][0]
+
+            # I
+            I = ors[-1][0]
+            if not df_updated:
+                df = df[I]
+
+            # I to num
+            ors[-1][0] = I.sum()
 
         # self.filtered_index_map is used elsewhere to map unfiltered index to filtered index
         self.filtered_index_map = df['_temp_range_index'].reset_index(drop=True)
