@@ -121,6 +121,10 @@ class SupperFilterViewer(QtWidgets.QWidget):
             if inspecting_index_arg[0] >= 0:
                 print(f"Inspect:  {inspecting_index_arg[1]}")
 
+            self.refresh_supper_filter_tree(enabled_ands, inspecting_index_arg)
+
+    def refresh_supper_filter_tree(self, enabled_ands, inspecting_index_arg):
+        self.tree.refresh_supper_filter_tree(enabled_ands, inspecting_index_arg)
 
     def refresh(self):
         # Depends on Search Box and Source list

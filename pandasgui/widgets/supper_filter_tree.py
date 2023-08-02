@@ -50,6 +50,10 @@ class SupperFilterTree(FlatDraggableTree):
         self.radio_groups = []
         self.checkbox_group = None
 
+        # self.my_checkbox
+        self.checkbox_buttons = {}
+        self.radio_buttons = {}
+
         # Tracking the all supper filters
         self.supper_filters: Dict[tuple, int] = {}
 
@@ -61,11 +65,33 @@ class SupperFilterTree(FlatDraggableTree):
 
     def get_model(self):
         return self.model
+
+    def refresh_supper_filter_tree(self, enabled_ands, inspecting_index_arg):
+        # Reset Button Text
+        for checkbox in self.checkbox_buttons.values():
+            checkbox.setText("*")
+        for radio_button in self.radio_buttons.values():
+            radio_button.setText("》")
+
+        # Update Button Text with Number
+        for rank, ors in enumerate(enabled_ands):
+            m_c_m, radio_index = "", -1
+            for or_cell in ors[:-1]:
+                m_c_m, radio_index = or_cell[0]
+                self.radio_buttons[(m_c_m, radio_index)].setText(f"{or_cell[1]}")
+
+            output, input = ors[-1][0], ors[-1][1]
+            if inspecting_index_arg[1] != -1:
+                self.checkbox_buttons[radio_index].setText(f"{inspecting_index_arg[1]}")
+            elif output != -1:
+                self.checkbox_buttons[radio_index].setText(f"{output}")
+
     def add_items_with_radio_buttons(self, radio_columns=FILTER_LEVEL):
         # Set header
         assert(radio_columns > 0)
         self.setColumnCount(radio_columns + len(self.module_method_header))
-        filter_headers = [f"{i}" for i in range(radio_columns)]
+        levels = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N']
+        filter_headers = [f"{i}" for i in levels[:radio_columns]]
         self.setHeaderLabels(self.module_method_header + filter_headers)
         self.supper_filters: Dict[tuple, int] = {}  # tuple => int
 
@@ -79,6 +105,7 @@ class SupperFilterTree(FlatDraggableTree):
 
         for i in range(radio_columns):
             checkbox_button = QtWidgets.QCheckBox('*')
+            self.checkbox_buttons[i] = checkbox_button
             # add button with id
             checkbox_group.addButton(checkbox_button, id=i)
             checkbox_group.setProperty("prefix", module_class_method)
@@ -106,6 +133,7 @@ class SupperFilterTree(FlatDraggableTree):
 
             # make all radio button in the button_group
             radio_group = QtWidgets.QButtonGroup(self)
+
             radio_group.setProperty("prefix", module_class_method)
             radio_group.setProperty("row", row+1)
             radio_group.setProperty("last_checked_id", -1)
@@ -120,6 +148,7 @@ class SupperFilterTree(FlatDraggableTree):
                 # add button with id
                 radio_group.addButton(radio_button, id=i)
                 self.setItemWidget(item, len(module_class_method) + i, radio_button)
+                self.radio_buttons[(module_class_method, i)] = radio_button
 
             # remember it for compare
             last_module_class_method = [module_class_method[0].__name__,
