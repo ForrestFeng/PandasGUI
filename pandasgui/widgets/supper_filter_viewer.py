@@ -109,8 +109,8 @@ class SupperFilterViewer(QtWidgets.QWidget):
         if self.pgdf is not None:
             self.pgdf.apply_supper_filter(enabled_ands, inspecting_index_arg, model)
 
+            print("="*50)
             for ors in enabled_ands:
-
                 print(print(f"\nInput: {ors[-1][-1]}"))
                 for or_cell in ors[:-1]:
                     m_c_m, radio_index = or_cell[0]
@@ -118,8 +118,8 @@ class SupperFilterViewer(QtWidgets.QWidget):
                     print(f"\tMethod: ({m_c_m[2]}, {radio_index}), Filtered: {count}")
                 print(f"Output: {ors[-1][0]}")
 
-                if inspecting_index_arg[0] >= 0:
-                    print(f"Inspect:  {inspecting_index_arg[1]}")
+            if inspecting_index_arg[0] >= 0:
+                print(f"Inspect:  {inspecting_index_arg[1]}")
 
 
     def refresh(self):

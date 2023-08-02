@@ -602,7 +602,7 @@ class PandasGuiDataFrameStore(PandasGuiStoreItem):
     ###################################
     # Supper Filters
 
-    def apply_supper_filter(self, enabled_filters: Dict[tuple, int], inspect_index_arg: Dict[int, int], model: SupperFilterModel):
+    def apply_supper_filter(self, enabled_filters: Dict[tuple, int], inspect_radio_index_arg: Dict[int, int], model: SupperFilterModel):
 
         # The enabled_filters in the form of
         # [ [[(F1,idx), n], [(F2,idx), n], [I, I'] ],  # with two or_cells followed by [output I, input I']
@@ -619,41 +619,86 @@ class PandasGuiDataFrameStore(PandasGuiStoreItem):
 
         df = self.df_unfiltered.copy()             # FF: PERF this is expensive ...
         df['_temp_range_index'] = df.reset_index().index
-        bool_ors_at_inspect_index = []
-        inspect_index = inspect_index_arg[0]
-        df_updated = False
+        radio_index = -1
+        valid_filters = enabled_filters
+        inspect_radio_index = inspect_radio_index_arg[0]
+        inspect_radio_index_col_has_no_filters = False
 
-        # adjust inspect_index because it could point to wrong rank ors
-        if inspect_index > -1:
+        def radio_index_of_min_rank(enabled_filters):
+            assert (len(enabled_filters) > 0)
+            ors = enabled_filters[0]
+            return ors[0][0][1]
+        def radio_index_of_max_rank(enabled_filters):
+            assert (len(enabled_filters) > 0)
+            ors = enabled_filters[-1]
+            return ors[0][0][1]
+
+        def get_nearest_left_rank(enabled_filters, inspect_radio_index):
             for rank, ors in enumerate(enabled_filters):
                 for or_cell in ors:
-                    m_c_m, radio_index = or_cell[0]
+                    m_c_m, radio_index_value = or_cell[0]
                     break
-                if inspect_index == radio_index:
-                    inspect_index = rank
-                    break
-                elif inspect_index > radio_index:
-                    inspect_index = rank - 1
-                    break
-                elif inspect_index < radio_index:
-                    continue
-            assert (inspect_index == -1 or inspect_index < len(enabled_filters))
+
+                if radio_index_value > inspect_radio_index:
+                    return rank-1
+
+        def skip_calculation(enabled_filters, inspect_radio_index):
+            if inspect_radio_index < radio_index_of_min_rank(enabled_filters):
+                return True
+            else:
+                return False
+
+
+        if len(enabled_filters) == 0:
+            if inspect_radio_index != -1:
+                inspect_radio_index_arg[-1] = self.df_unfiltered.shape[0]
+        else:
+            if inspect_radio_index == -1:
+                pass
+            elif inspect_radio_index < radio_index_of_min_rank(enabled_filters):
+                inspect_radio_index_arg[-1] = self.df_unfiltered.shape[0]
+                inspect_radio_index_col_has_no_filters = True
+                # set enabled_filters as empty list so that we will not calculate it
+                valid_filters = []
+                return
+            elif radio_index_of_max_rank(enabled_filters) < inspect_radio_index:
+                # inspect_index_arg[-1] = result_df.shape[0], check RESULT_DF_INSPECT code
+                inspect_radio_index_col_has_no_filters = True
+                pass  # do it after the df is updated
+            else:  # inspect in [min_rank.radio_index, max_rank.radio_index] (range includes begin and end item)
+                # need compair radio_index to find the correct rank
+                for rank, ors in enumerate(enabled_filters):
+                    for or_cell in ors:
+                        m_c_m, radio_index = or_cell[0]
+                        break
+                    if inspect_radio_index == radio_index:
+                        # inspect_index_arg[-1] = rank.input
+                        inspect_radio_index = rank
+                        break
+                else:  #  inspect column contains no filters
+                    # inspect_index_arg[-1] = left_rank.output
+                    inspect_radio_index = get_nearest_left_rank(enabled_filters, inspect_radio_index)
+                    inspect_radio_index_col_has_no_filters = True
+
+                # Update enabled_filters only care the part of the enabled filters
+                valid_filters = enabled_filters[:inspect_radio_index+1]
 
         # Fx is the filter-result based on df
         def Fx_for(m_c_m):
             return model.apply_supper_filter(m_c_m[0], m_c_m[1], m_c_m[2], df)
 
         # NEW LOGIC multiple loop easy to understand
-        ###################
+        ###################################################################################################
         # LOOP 1 n -> Fx
-        for ors in enabled_filters:
+
+        for rank, ors in enumerate(valid_filters):
             for or_cell in ors[:-1]:
                 m_c_m, radio_index = or_cell[0]
                 or_cell[-1] = Fx_for(m_c_m)
 
-        ###################
+        ###################################################################################################
         # LOOP 2 Output, Input
-        for rank, ors in enumerate(enabled_filters):
+        for rank, ors in enumerate(valid_filters):
             # Input
             if rank == 0:
                 # First rank Input
@@ -670,21 +715,11 @@ class PandasGuiDataFrameStore(PandasGuiStoreItem):
             Output = ors[-1][-1] & functools.reduce(lambda a, b: a | b, bool_ors)
             ors[-1][0] = Output
 
-            # Update df and inspect_index_arg
-            if inspect_index == rank:
-                # Input is the first rank
-                if ors[-1][-1] is True:
-                    inspect_index_arg[-1] = self.df_unfiltered.shape[0]
-                else: # Input is the second, or second+ rank
-                    Input = ors[-1][-1]
-                    inspect_index_arg[-1] = Input.sum()  # Input.sum
-                    break
 
-
-        ###################
-        # LOOP 3 Update df; Fx, Input, Output to number
-        LastOutput = None
-        for rank, ors in enumerate(enabled_filters):
+        ###################################################################################################
+        # LOOP 3 Fx, Input, Output to number
+        FinalOutput = None
+        for rank, ors in enumerate(valid_filters):
             for or_cell in ors[:-1]:
                 m_c_m, radio_index = or_cell[0]
                 # Fx -> fx_at_level -> num
@@ -693,26 +728,74 @@ class PandasGuiDataFrameStore(PandasGuiStoreItem):
                 fx_at_level = Input & or_cell[-1]
                 or_cell[-1] = fx_at_level.sum()
 
-            # Input -> num
-            if rank == 0:  # First Input
-                ors[-1][-1] = self.df_unfiltered.shape[0]
-            else:          # 2+ Input
-                # Other Input equal to previous Out
-                PreOutput = enabled_filters[rank-1][-1][0]
-                ors[-1][-1] = PreOutput
+            # Update inspect_index_arg
+            if inspect_radio_index == rank:
+                Input = ors[-1][-1]
+                Output = ors[-1][0]
+                if Input is True:
+                    if inspect_radio_index_col_has_no_filters:
+                        inspect_radio_index_arg[-1] = Output.sum()  # Input.sum
+                        FinalOutput = Output
+                        self.df_highlight_row_index = None
+                        # Input -> Num
+                        ors[-1][-1] = self.df_unfiltered.shape[0]
+                        # Output -> Num
+                        ors[-1][0] = Output.sum()
+                    else:
+                        inspect_radio_index_arg[-1] = self.df_unfiltered.shape[0]
+                        self.df_highlight_row_index = Output
+                        # Input -> Num
+                        ors[-1][-1] = self.df_unfiltered.shape[0]
+                        # Output -> Num
+                        ors[-1][0] = Output.sum()
+                else:
+                    if inspect_radio_index_col_has_no_filters:
+                        inspect_radio_index_arg[-1] = Output.sum()  # Input.sum
+                        FinalOutput = Output
+                        self.df_highlight_row_index = None
+                        # Input -> Num
+                        ors[-1][-1] = Output.sum()
+                        # Output -> Num
+                        ors[-1][0] = Output.sum()
+                    else:
+                        inspect_radio_index_arg[-1] = Input.sum()  # Input.sum
+                        FinalOutput = Input
+                        self.df_highlight_row_index = Output
+                        # Input -> Num
+                        ors[-1][-1] = Input.sum()
+                        # Output -> Num
+                        ors[-1][0] = Output.sum()
+            else:
+                # Input -> num
+                if rank == 0:  # First Input
+                    ors[-1][-1] = self.df_unfiltered.shape[0]
+                else:          # Non Input
+                    # Other Input equal to previous Out
+                    PreOutput = enabled_filters[rank-1][-1][0]
+                    ors[-1][-1] = PreOutput.sum()
 
-            # Output to num
-            if inspect_index == rank:
-                if rank == 0:  # First rank
-                    LastOutput = ors[-1][0]
-                    ors[-1][0] = LastOutput.sum()
-                else:          # second+ rank
-                    LastOutput = ors[-1][0]
-                    ors[-1][0] = LastOutput.sum()
-                    break
+                # Output to num
+                if rank+1 == len(enabled_filters):  # Last rank
+                    if inspect_radio_index == -1:
+                        inspect_radio_index_arg[-1] = -1
+                        OutPut = ors[-1][0]
+                        FinalOutput = Output
+                        self.df_highlight_row_index = None
+                        # Output -> Num
+                        ors[-1][0] = Output.sum()
+                    else:  #  radio_index_of_max_rank(enabled_filters) < inspect_radio_index # For RESULT_DF_INSPECT above
+                        OutPut = ors[-1][0]
+                        FinalOutput = Output
+                        inspect_radio_index_arg[-1] = Output.sum()
+                        self.df_highlight_row_index = None
+                        # Output -> Num
+                        ors[-1][0] = Output.sum()
+                else:                                                              # Non-last rank
+                    ors[-1][0] = ors[-1][0].sum()
 
-        if LastOutput is not None:
-            df = df[LastOutput]
+
+        if FinalOutput is not None:
+            df = df[FinalOutput]
 
         # self.filtered_index_map is used elsewhere to map unfiltered index to filtered index
         self.filtered_index_map = df['_temp_range_index'].reset_index(drop=True)
