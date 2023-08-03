@@ -19,3 +19,4 @@ pypi.sh
 
 # pip build 
 build/lib/
+*.log
