@@ -78,11 +78,14 @@ class SupperFilterTree(FlatDraggableTree):
             m_c_m, radio_index = "", -1
             for or_cell in ors[:-1]:
                 m_c_m, radio_index = or_cell[0]
-                self.radio_buttons[(m_c_m, radio_index)].setText(f"{or_cell[1]}")
+                filtered = or_cell[1]
+                if filtered != -1:
+                    self.radio_buttons[(m_c_m, radio_index)].setText(f"{or_cell[1]}")
 
             output, input = ors[-1][0], ors[-1][1]
             if inspecting_index_arg[1] != -1:
-                self.checkbox_buttons[radio_index].setText(f"{inspecting_index_arg[1]}")
+                if inspecting_index_arg[0] == radio_index:
+                    self.checkbox_buttons[radio_index].setText(f"{inspecting_index_arg[1]}")
             elif output != -1:
                 self.checkbox_buttons[radio_index].setText(f"{output}")
 

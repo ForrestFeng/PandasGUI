@@ -10,13 +10,13 @@ from PyQt5.QtCore import Qt
 from typing_extensions import Literal
 from pandasgui.store import PandasGuiDataFrameStore
 import pandasgui
-
-import logging
-
 from pandasgui.widgets.column_menu import ColumnMenu
 
-logger = logging.getLogger(__name__)
+from loguru import logger
 
+
+logger.add(sys.stderr, format="{time} {level} {message}", filter="dataframe_viewer", backtrace=True, diagnose=True)
+logger.add("pandasui_{time}.log", format="{time} {level} {message}", filter="my_module", level="INFO")
 
 class DataFrameViewer(QtWidgets.QWidget):
     def __init__(self, pgdf: PandasGuiDataFrameStore):
@@ -378,6 +378,7 @@ class DataTableModel(QtCore.QAbstractTableModel):
         row = index.row()
         col = index.column()
         cell = self.pgdf.ndarray[row][col]
+        #logger.debug(f"DataTableModel data method: index({row}, {col})")
 
         if (role == QtCore.Qt.DisplayRole
                 or role == QtCore.Qt.EditRole
@@ -404,14 +405,20 @@ class DataTableModel(QtCore.QAbstractTableModel):
 
         elif role == QtCore.Qt.BackgroundRole:
 
+            if self.pgdf.df_highlight_row_index is not None:
+                idx = self.pgdf.filtered_index_map[row]
+                if self.pgdf.df_highlight_row_index[idx]:
+                    return QtGui.QColor(QtGui.QColor(0, 125, 0, int(255 * 0.5)))
+
+
             color_mode = self.dataframe_viewer.color_mode
+
 
             if color_mode == None or pd.isna(cell):
                 return None
 
             # data viewer highlight the row index
-            if self.pgdf.df_highlight_row_index is not None and self.pgdf.df_highlight_row_index[row]:
-                return QtGui.QColor(QtGui.QColor(0, 125, 0, int(255 * 0.5)))
+
 
 
             # data viewer color by row, col, all, None logic
