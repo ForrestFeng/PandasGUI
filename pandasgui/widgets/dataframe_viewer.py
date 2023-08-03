@@ -16,7 +16,7 @@ from loguru import logger
 
 
 logger.add(sys.stderr, format="{time} {level} {message}", filter="dataframe_viewer", backtrace=True, diagnose=True)
-logger.add("pandasui_{time}.log", format="{time} {level} {message}", filter="my_module", level="INFO")
+logger.add("pandasui.log", format="{time} {level} {message}", filter="my_module", level="INFO")
 
 class DataFrameViewer(QtWidgets.QWidget):
     def __init__(self, pgdf: PandasGuiDataFrameStore):

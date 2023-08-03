@@ -8,11 +8,11 @@ from pandasgui.widgets.supper_filter_tree import SupperFilterTree, SupperFilterM
 from PyQt5 import QtCore, QtGui, QtWidgets
 from PyQt5.QtCore import Qt, pyqtSignal
 
-import logging
+from loguru import logger
+logger.add(sys.stderr, format="{time} {level} {message}", filter="dataframe_viewer", backtrace=True, diagnose=True)
+logger.add("pandasui.log", format="{time} {level} {message}", filter="my_module", level="INFO")
 
 from pandasgui.store import PandasGuiDataFrameStore
-
-logger = logging.getLogger(__name__)
 
 
 class SupperFilterViewer(QtWidgets.QWidget):
@@ -109,17 +109,17 @@ class SupperFilterViewer(QtWidgets.QWidget):
         if self.pgdf is not None:
             self.pgdf.apply_supper_filter(enabled_ands, inspecting_index_arg, model)
 
-            print("="*50)
+            logger.debug("="*50)
             for ors in enabled_ands:
-                print(print(f"\nInput: {ors[-1][-1]}"))
+                logger.debug(f"\nInput: {ors[-1][-1]}")
                 for or_cell in ors[:-1]:
                     m_c_m, radio_index = or_cell[0]
                     count = or_cell[1]
-                    print(f"\tMethod: ({m_c_m[2]}, {radio_index}), Filtered: {count}")
-                print(f"Output: {ors[-1][0]}")
+                    logger.debug(f"\tMethod: ({m_c_m[2]}, {radio_index}), Filtered: {count}")
+                logger.debug(f"Output: {ors[-1][0]}")
 
             if inspecting_index_arg[0] >= 0:
-                print(f"Inspect:  {inspecting_index_arg[1]}")
+                logger.debug(f"Inspect:  {inspecting_index_arg[1]}")
 
             self.refresh_supper_filter_tree(enabled_ands, inspecting_index_arg)
 
